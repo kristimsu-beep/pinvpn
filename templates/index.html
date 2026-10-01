@@ -291,6 +291,218 @@
 
 <script src="/static/app.js"></script>
 
+<!-- =========================
+     PINVPN DASHBOARD
+========================= -->
+
+<section id="dashboard" class="dashboard hidden">
+
+    <div class="dashboard-header">
+        <div>
+            <div class="dashboard-brand">
+                <span class="brand-pin">Pin</span><span class="brand-vpn">VPN</span>
+            </div>
+            <p class="dashboard-subtitle">
+                Your private VPN control panel
+            </p>
+        </div>
+
+        <div class="dashboard-user">
+            <div class="user-avatar" id="dashboardAvatar">U</div>
+
+            <div class="user-info">
+                <strong id="dashboardUsername">User</strong>
+                <span>PinVPN account</span>
+            </div>
+
+            <button
+                class="logout-button"
+                onclick="logout()"
+                title="Log out"
+            >
+                Logout
+            </button>
+        </div>
+    </div>
+
+
+    <div class="dashboard-grid">
+
+        <!-- VPN STATUS -->
+
+        <div class="dashboard-card vpn-card">
+
+            <div class="card-title">
+                <span>VPN STATUS</span>
+            </div>
+
+            <div class="vpn-status">
+                <div class="status-indicator disconnected"
+                     id="vpnStatusIndicator">
+                </div>
+
+                <div>
+                    <div
+                        class="vpn-status-text"
+                        id="vpnStatusText"
+                    >
+                        DISCONNECTED
+                    </div>
+
+                    <div
+                        class="vpn-status-description"
+                        id="vpnStatusDescription"
+                    >
+                        Your VPN connection is currently inactive.
+                    </div>
+                </div>
+            </div>
+
+            <button
+                class="connect-button"
+                id="connectVpnButton"
+                onclick="toggleVPN()"
+            >
+                CONNECT VPN
+            </button>
+
+        </div>
+
+
+        <!-- SERVER -->
+
+        <div class="dashboard-card">
+
+            <div class="card-title">
+                <span>VPN SERVER</span>
+            </div>
+
+            <div class="server-large">
+
+                <div class="server-flag">
+                    🇹🇼
+                </div>
+
+                <div class="server-information">
+
+                    <h2>Taipei</h2>
+
+                    <p>
+                        Taiwan
+                    </p>
+
+                    <div class="server-protocol">
+                        WireGuard
+                    </div>
+
+                </div>
+
+                <div class="server-online">
+                    <span></span>
+                    ONLINE
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ACCOUNT -->
+
+        <div class="dashboard-card">
+
+            <div class="card-title">
+                <span>ACCOUNT</span>
+            </div>
+
+            <div class="account-row">
+
+                <span>Username</span>
+
+                <strong id="accountUsername">
+                    —
+                </strong>
+
+            </div>
+
+            <div class="account-row">
+
+                <span>Account status</span>
+
+                <strong class="account-active">
+                    ACTIVE
+                </strong>
+
+            </div>
+
+            <div class="account-row">
+
+                <span>VPN access</span>
+
+                <strong class="account-active">
+                    ENABLED
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <!-- DEVICES -->
+
+        <div class="dashboard-card devices-card">
+
+            <div class="card-title devices-title">
+
+                <span>
+                    YOUR DEVICES
+                </span>
+
+                <button
+                    class="add-device-button"
+                    onclick="addDevice()"
+                >
+                    + Add device
+                </button>
+
+            </div>
+
+            <div
+                class="devices-list"
+                id="devicesList"
+            >
+
+                <div class="no-devices">
+
+                    <div class="no-devices-icon">
+                        📱
+                    </div>
+
+                    <h3>
+                        No devices connected
+                    </h3>
+
+                    <p>
+                        Add your first device to start using PinVPN.
+                    </p>
+
+                    <button
+                        class="secondary-button"
+                        onclick="addDevice()"
+                    >
+                        + Add device
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
 </body>
 
 </html>
