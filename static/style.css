@@ -373,3 +373,170 @@ footer {
     }
 
 }
+
+/* =========================
+   AUTH MODAL
+========================= */
+
+.hidden {
+    display: none !important;
+}
+
+
+.modal {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 1000;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+
+    background:
+        rgba(2, 5, 15, 0.75);
+
+    backdrop-filter: blur(15px);
+}
+
+
+.modal-box {
+    position: relative;
+
+    width: 100%;
+    max-width: 430px;
+
+    padding: 35px;
+
+    border-radius: 22px;
+
+    background:
+        #10172a;
+
+    border:
+        1px solid
+        rgba(255, 255, 255, 0.1);
+
+    box-shadow:
+        0 30px 100px
+        rgba(0, 0, 0, 0.5);
+}
+
+
+.modal-box h2 {
+    font-size: 30px;
+
+    margin-bottom: 10px;
+}
+
+
+.modal-description {
+    color: #8994ad;
+
+    line-height: 1.6;
+
+    margin-bottom: 25px;
+}
+
+
+.modal-close {
+    position: absolute;
+
+    top: 15px;
+    right: 18px;
+
+    padding: 3px;
+
+    background: none;
+
+    color: #8b95aa;
+
+    font-size: 28px;
+
+    border: none;
+
+    cursor: pointer;
+}
+
+
+.modal-box label {
+    display: block;
+
+    margin-bottom: 7px;
+
+    color: #aeb8cd;
+
+    font-size: 14px;
+}
+
+
+.modal-box input {
+    width: 100%;
+
+    padding: 13px 14px;
+
+    margin-bottom: 18px;
+
+    border-radius: 10px;
+
+    outline: none;
+
+    color: white;
+
+    background:
+        rgba(255, 255, 255, 0.05);
+
+    border:
+        1px solid
+        rgba(255, 255, 255, 0.1);
+
+    font-size: 15px;
+}
+
+
+.modal-box input:focus {
+    border-color: #6f83ff;
+}
+
+
+.auth-button {
+    width: 100%;
+
+    margin-top: 5px;
+}
+
+
+.auth-message {
+    min-height: 22px;
+
+    margin-top: 15px;
+
+    color: #ff8794;
+
+    font-size: 14px;
+
+    text-align: center;
+}
+
+
+.switch-auth {
+    width: 100%;
+
+    margin-top: 20px;
+
+    padding: 0;
+
+    background: none;
+
+    border: none;
+
+    color: #8295ff;
+
+    cursor: pointer;
+
+    font-size: 14px;
+}
