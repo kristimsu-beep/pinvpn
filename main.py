@@ -1190,6 +1190,7 @@ PersistentKeepalive = 25
 
 # ============================================================
 # GETIP TEST
+# Создание туннеля + получение WireGuard конфигурации
 # ============================================================
 
 @app.post("/api/getip/test")
@@ -1200,6 +1201,7 @@ async def test_getip_tunnel():
     )
 
     if not getip_session:
+
         return JSONResponse(
             status_code=503,
             content={
@@ -1214,7 +1216,12 @@ async def test_getip_tunnel():
             timeout=30.0
         ) as client:
 
-            response = await client.post(
+            # ------------------------------------------------
+            # 1. СОЗДАЁМ GETIP TUNNEL
+            # ------------------------------------------------
+
+            create_response = await client.post(
+
                 "https://getip.online/api/tunnels/create.php",
 
                 files={
@@ -1222,6 +1229,7 @@ async def test_getip_tunnel():
                         None,
                         "PinVPN-Auto-Test"
                     ),
+
                     "server_id": (
                         None,
                         "3"
@@ -1234,44 +1242,184 @@ async def test_getip_tunnel():
                 }
             )
 
-        try:
-            data = response.json()
+            # ------------------------------------------------
+            # Проверяем JSON ответа
+            # ------------------------------------------------
 
-        except Exception:
+            try:
 
-            return JSONResponse(
-                status_code=502,
-                content={
-                    "detail":
-                    "GetIP returned invalid JSON.",
-                    "status_code":
-                    response.status_code,
-                    "response":
-                    response.text[:1000]
+                create_data = (
+                    create_response.json()
+                )
+
+            except Exception:
+
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "detail":
+                        "GetIP returned invalid JSON while creating tunnel.",
+
+                        "getip_status":
+                        create_response.status_code,
+
+                        "response":
+                        create_response.text[:1000]
+                    }
+                )
+
+            # ------------------------------------------------
+            # Проверяем создание туннеля
+            # ------------------------------------------------
+
+            if (
+                create_response.status_code != 200
+                or
+                not create_data.get("success")
+            ):
+
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "detail":
+                        "GetIP tunnel creation failed.",
+
+                        "getip_status":
+                        create_response.status_code,
+
+                        "getip_response":
+                        create_data
+                    }
+                )
+
+            tunnel_id = create_data.get(
+                "tunnel_id"
+            )
+
+            tunnel_uuid = create_data.get(
+                "tunnel_uuid"
+            )
+
+            ipv6 = create_data.get(
+                "ipv6"
+            )
+
+            if not tunnel_id:
+
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "detail":
+                        "GetIP created the tunnel but did not return tunnel_id.",
+
+                        "getip_response":
+                        create_data
+                    }
+                )
+
+            # ------------------------------------------------
+            # 2. ПОЛУЧАЕМ WIREGUARD CONFIG
+            # ------------------------------------------------
+
+            download_response = await client.get(
+
+                "https://getip.online/api/tunnels/download.php",
+
+                params={
+                    "tunnel_id":
+                    tunnel_id
+                },
+
+                headers={
+                    "Cookie":
+                    f"PHPSESSID={getip_session}"
                 }
             )
 
-        if response.status_code != 200:
+            # ------------------------------------------------
+            # Проверяем получение конфигурации
+            # ------------------------------------------------
 
-            return JSONResponse(
-                status_code=502,
-                content={
-                    "detail":
-                    "GetIP tunnel creation failed.",
-                    "getip_status":
-                    response.status_code,
-                    "getip_response":
-                    data
-                }
+            if download_response.status_code != 200:
+
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "detail":
+                        "Tunnel was created, but WireGuard configuration could not be downloaded.",
+
+                        "tunnel_id":
+                        tunnel_id,
+
+                        "tunnel_uuid":
+                        tunnel_uuid,
+
+                        "ipv6":
+                        ipv6,
+
+                        "getip_status":
+                        download_response.status_code,
+
+                        "getip_response":
+                        download_response.text[:1000]
+                    }
+                )
+
+            wireguard_config = (
+                download_response.text
             )
 
-        return {
-            "status":
-            "ok",
+            # ------------------------------------------------
+            # Проверяем, что это действительно WireGuard config
+            # ------------------------------------------------
 
-            "getip":
-            data
-        }
+            if (
+                "[Interface]" not in wireguard_config
+                or
+                "[Peer]" not in wireguard_config
+            ):
+
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "detail":
+                        "GetIP returned an unexpected WireGuard configuration.",
+
+                        "tunnel_id":
+                        tunnel_id,
+
+                        "response":
+                        wireguard_config[:2000]
+                    }
+                )
+
+            # ------------------------------------------------
+            # 3. УСПЕШНЫЙ РЕЗУЛЬТАТ
+            # ------------------------------------------------
+
+            return {
+
+                "status":
+                "ok",
+
+                "message":
+                "GetIP tunnel created and WireGuard configuration downloaded successfully.",
+
+                "tunnel": {
+
+                    "id":
+                    tunnel_id,
+
+                    "uuid":
+                    tunnel_uuid,
+
+                    "ipv6":
+                    ipv6
+                },
+
+                "wireguard_config":
+                wireguard_config
+            }
 
     except Exception as error:
 
@@ -1280,6 +1428,7 @@ async def test_getip_tunnel():
             content={
                 "detail":
                 "GetIP request failed.",
+
                 "error":
                 str(error)
             }
