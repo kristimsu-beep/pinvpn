@@ -1,4 +1,7 @@
 import sys
+import os
+import subprocess
+import tempfile
 import requests
 
 from PySide6.QtCore import Qt
@@ -22,6 +25,18 @@ SERVER_URL = "https://pinvpn.onrender.com"
 
 
 # ============================================================
+# WIREGUARD
+# ============================================================
+
+WIREGUARD_EXE = r"C:\Program Files\WireGuard\wireguard.exe"
+
+WG_TEMP_CONFIG = os.path.join(
+    tempfile.gettempdir(),
+    "pinvpn.conf"
+)
+
+
+# ============================================================
 # MAIN WINDOW
 # ============================================================
 
@@ -32,6 +47,9 @@ class PinVPN(QWidget):
 
         self.token = None
         self.devices = []
+
+        self.connected = False
+        self.current_config_path = None
 
         self.setWindowTitle("PinVPN")
         self.setFixedSize(420, 520)
@@ -50,7 +68,6 @@ class PinVPN(QWidget):
         layout.setSpacing(14)
         layout.setContentsMargins(35, 35, 35, 35)
 
-        # Logo
         title = QLabel("PinVPN")
 
         title.setAlignment(Qt.AlignCenter)
@@ -62,7 +79,6 @@ class PinVPN(QWidget):
             """
         )
 
-        # Subtitle
         subtitle = QLabel("Secure VPN")
 
         subtitle.setAlignment(Qt.AlignCenter)
@@ -74,14 +90,12 @@ class PinVPN(QWidget):
             """
         )
 
-        # Username
         self.username = QLineEdit()
 
         self.username.setPlaceholderText(
             "Логин"
         )
 
-        # Password
         self.password = QLineEdit()
 
         self.password.setPlaceholderText(
@@ -92,7 +106,6 @@ class PinVPN(QWidget):
             QLineEdit.Password
         )
 
-        # Login button
         self.login_button = QPushButton(
             "ВОЙТИ"
         )
@@ -101,19 +114,16 @@ class PinVPN(QWidget):
             self.login
         )
 
-        # Device label
         device_label = QLabel(
             "Устройство:"
         )
 
-        # Device selector
         self.device_box = QComboBox()
 
         self.device_box.setEnabled(
             False
         )
 
-        # Connect button
         self.connect_button = QPushButton(
             "ПОДКЛЮЧИТЬ"
         )
@@ -123,10 +133,9 @@ class PinVPN(QWidget):
         )
 
         self.connect_button.clicked.connect(
-            self.connect_vpn
+            self.toggle_vpn
         )
 
-        # Status
         self.status = QLabel(
             "Статус: Не подключено"
         )
@@ -135,7 +144,6 @@ class PinVPN(QWidget):
             Qt.AlignCenter
         )
 
-        # Add everything
         layout.addWidget(title)
         layout.addWidget(subtitle)
 
@@ -325,11 +333,8 @@ class PinVPN(QWidget):
             data = response.json()
 
             self.token = (
-
                 data.get("token")
-
                 or data.get("access_token")
-
             )
 
             if not self.token:
@@ -422,15 +427,9 @@ class PinVPN(QWidget):
             for device in self.devices:
 
                 name = (
-
                     device.get("name")
-
-                    or device.get(
-                        "device_name"
-                    )
-
+                    or device.get("device_name")
                     or device.get("id")
-
                     or "Устройство"
                 )
 
@@ -491,12 +490,86 @@ class PinVPN(QWidget):
             )
 
     # ========================================================
-    # VPN CONNECTION
+    # TOGGLE VPN
+    # ========================================================
+
+    def toggle_vpn(self):
+
+        if self.connected:
+
+            self.disconnect_vpn()
+
+        else:
+
+            self.connect_vpn()
+
+    # ========================================================
+    # GET WIREGUARD CONFIG
+    # ========================================================
+
+    def get_wireguard_config(self, device):
+
+        device_id = (
+            device.get("id")
+            or device.get("_id")
+        )
+
+        if not device_id:
+
+            raise Exception(
+                "У выбранного устройства отсутствует ID."
+            )
+
+        response = requests.get(
+
+            f"{SERVER_URL}/api/client/devices/"
+            f"{device_id}/wireguard",
+
+            headers={
+                "Authorization":
+                f"Bearer {self.token}"
+            },
+
+            timeout=30,
+        )
+
+        if response.status_code != 200:
+
+            raise Exception(
+                "Сервер не смог вернуть "
+                "WireGuard-конфигурацию.\n\n"
+                f"HTTP {response.status_code}\n"
+                f"{response.text}"
+            )
+
+        data = response.json()
+
+        config = data.get(
+            "wireguard_config"
+        )
+
+        if not config:
+
+            raise Exception(
+                "Сервер не вернул "
+                "WireGuard-конфигурацию."
+            )
+
+        return config
+
+    # ========================================================
+    # CONNECT VPN
     # ========================================================
 
     def connect_vpn(self):
 
         if not self.token:
+
+            QMessageBox.warning(
+                self,
+                "PinVPN",
+                "Сначала войдите в аккаунт."
+            )
 
             return
 
@@ -507,44 +580,231 @@ class PinVPN(QWidget):
         if not device:
 
             QMessageBox.warning(
-
                 self,
-
                 "PinVPN",
-
                 "Выберите устройство."
             )
 
             return
 
         self.status.setText(
-            "Статус: Подготовка подключения..."
+            "Статус: Получение конфигурации..."
         )
 
-        # ----------------------------------------------------
-        # ВАЖНО:
-        #
-        # Настоящее WireGuard-подключение
-        # добавим следующим этапом.
-        # ----------------------------------------------------
-
-        QMessageBox.information(
-
-            self,
-
-            "PinVPN",
-
-            (
-                "Авторизация работает.\n"
-                "Устройство получено с сервера.\n\n"
-                "Следующим шагом подключим "
-                "настоящий WireGuard."
-            ),
+        self.connect_button.setEnabled(
+            False
         )
+
+        try:
+
+            # ------------------------------------------------
+            # Проверяем WireGuard
+            # ------------------------------------------------
+
+            if not os.path.exists(
+                WIREGUARD_EXE
+            ):
+
+                raise Exception(
+                    "WireGuard не найден.\n\n"
+                    "Ожидаемый путь:\n"
+                    f"{WIREGUARD_EXE}"
+                )
+
+            # ------------------------------------------------
+            # Получаем конфигурацию
+            # ------------------------------------------------
+
+            config = self.get_wireguard_config(
+                device
+            )
+
+            # ------------------------------------------------
+            # Сохраняем конфигурацию
+            # ------------------------------------------------
+
+            with open(
+                WG_TEMP_CONFIG,
+                "w",
+                encoding="utf-8"
+            ) as file:
+
+                file.write(config)
+
+            self.current_config_path = (
+                WG_TEMP_CONFIG
+            )
+
+            self.status.setText(
+                "Статус: Подключение..."
+            )
+
+            # ------------------------------------------------
+            # Запускаем WireGuard
+            #
+            # /installtunnelservice
+            # создаёт сервис туннеля Windows.
+            # ------------------------------------------------
+
+            result = subprocess.run(
+
+                [
+                    WIREGUARD_EXE,
+                    "/installtunnelservice",
+                    WG_TEMP_CONFIG,
+                ],
+
+                capture_output=True,
+
+                text=True,
+
+                timeout=30,
+            )
+
+            # ------------------------------------------------
+            # Проверяем результат
+            # ------------------------------------------------
+
+            if result.returncode != 0:
+
+                error_text = (
+                    result.stderr
+                    or result.stdout
+                    or "Неизвестная ошибка WireGuard."
+                )
+
+                raise Exception(
+                    "WireGuard не смог "
+                    "запустить туннель.\n\n"
+                    f"{error_text}"
+                )
+
+            self.connected = True
+
+            self.status.setText(
+                "Статус: 🟢 Подключено"
+            )
+
+            self.connect_button.setText(
+                "ОТКЛЮЧИТЬ"
+            )
+
+        except Exception as error:
+
+            self.status.setText(
+                "Статус: Ошибка подключения"
+            )
+
+            QMessageBox.critical(
+
+                self,
+
+                "PinVPN",
+
+                str(error)
+            )
+
+        finally:
+
+            self.connect_button.setEnabled(
+                True
+            )
+
+    # ========================================================
+    # DISCONNECT VPN
+    # ========================================================
+
+    def disconnect_vpn(self):
 
         self.status.setText(
-            "Статус: Готово к подключению"
+            "Статус: Отключение..."
         )
+
+        self.connect_button.setEnabled(
+            False
+        )
+
+        try:
+
+            if self.current_config_path:
+
+                result = subprocess.run(
+
+                    [
+                        WIREGUARD_EXE,
+                        "/uninstalltunnelservice",
+                        "pinvpn",
+                    ],
+
+                    capture_output=True,
+
+                    text=True,
+
+                    timeout=30,
+                )
+
+                # Если сервис уже отсутствует,
+                # считаем VPN отключённым.
+
+            self.connected = False
+
+            self.status.setText(
+                "Статус: 🔴 Не подключено"
+            )
+
+            self.connect_button.setText(
+                "ПОДКЛЮЧИТЬ"
+            )
+
+        except Exception as error:
+
+            QMessageBox.warning(
+
+                self,
+
+                "PinVPN",
+
+                (
+                    "Не удалось отключить VPN:\n\n"
+                    f"{error}"
+                ),
+            )
+
+        finally:
+
+            self.connect_button.setEnabled(
+                True
+            )
+
+    # ========================================================
+    # CLOSE WINDOW
+    # ========================================================
+
+    def closeEvent(self, event):
+
+        if self.connected:
+
+            try:
+
+                subprocess.run(
+
+                    [
+                        WIREGUARD_EXE,
+                        "/uninstalltunnelservice",
+                        "pinvpn",
+                    ],
+
+                    capture_output=True,
+
+                    text=True,
+
+                    timeout=15,
+                )
+
+            except Exception:
+                pass
+
+        event.accept()
 
 
 # ============================================================
