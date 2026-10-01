@@ -1215,7 +1215,7 @@ async def test_getip_tunnel():
         ) as client:
 
             response = await client.post(
-                "https://getip.online./api/tunnels/create.php",
+                "https://getip.online/api/tunnels/create.php",
 
                 files={
                     "comment": (
