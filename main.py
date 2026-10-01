@@ -709,56 +709,33 @@ async def logout(
 
     return response
 
+class ClientLoginRequest(BaseModel):
+    username: str
+    password: str
+
 # ============================================================
 # PINVPN CLIENT
 # Авторизация Windows / Android клиента
 # ============================================================
 
+from pydantic import BaseModel
+
 @app.post("/api/client/login")
 async def client_login(
-    request: Request
+    data: ClientLoginRequest
 ):
-
     if db is None:
-
         return JSONResponse(
             status_code=503,
             content={
-                "detail":
-                "Database is not connected."
+                "detail": "Database is not connected."
             }
         )
 
-    try:
-
-        data = await request.json()
-
-    except Exception:
-
-        return JSONResponse(
-            status_code=400,
-            content={
-                "detail":
-                "Invalid JSON."
-            }
-        )
-
-    username = str(
-        data.get(
-            "username",
-            ""
-        )
-    ).strip()
-
-    password = str(
-        data.get(
-            "password",
-            ""
-        )
-    )
+    username = data.username.strip()
+    password = data.password
 
     if not username or not password:
-
         return JSONResponse(
             status_code=400,
             content={
@@ -775,7 +752,6 @@ async def client_login(
     )
 
     if not user:
-
         return JSONResponse(
             status_code=401,
             content={
@@ -788,7 +764,6 @@ async def client_login(
         password.encode("utf-8"),
         user["password_hash"].encode("utf-8")
     ):
-
         return JSONResponse(
             status_code=401,
             content={
@@ -797,11 +772,7 @@ async def client_login(
             }
         )
 
-    if not user.get(
-        "active",
-        True
-    ):
-
+    if not user.get("active", True):
         return JSONResponse(
             status_code=403,
             content={
@@ -810,63 +781,31 @@ async def client_login(
             }
         )
 
-    # --------------------------------------------------------
-    # СОЗДАЁМ CLIENT TOKEN
-    # --------------------------------------------------------
+    client_token = secrets.token_urlsafe(48)
 
-    client_token = secrets.token_urlsafe(
-        48
-    )
-
-    now = datetime.now(
-        timezone.utc
-    )
-
-    expires_at = (
-        now
-        + timedelta(days=90)
-    )
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=90)
 
     await db.client_tokens.insert_one(
         {
-            "token":
-            client_token,
-
-            "user_id":
-            user["_id"],
-
-            "created_at":
-            now,
-
-            "expires_at":
-            expires_at,
-
-            "active":
-            True
+            "token": client_token,
+            "user_id": user["_id"],
+            "created_at": now,
+            "expires_at": expires_at,
+            "active": True
         }
     )
 
     return {
-
-        "status":
-        "ok",
-
-        "token":
-        client_token,
-
+        "status": "ok",
+        "token": client_token,
         "expires_at":
-        expires_at.isoformat(),
-
+            expires_at.isoformat(),
         "user": {
-
-            "id":
-            str(user["_id"]),
-
-            "username":
-            user["username"]
+            "id": str(user["_id"]),
+            "username": user["username"]
         }
     }
-
 
 # ============================================================
 # CLIENT AUTHENTICATION
