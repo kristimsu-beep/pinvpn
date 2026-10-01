@@ -492,6 +492,23 @@ async def login(
 # ============================================================
 
 @app.get("/api/auth/me")
+async def auth_me(request: Request):
+
+    user = await current_user(request)
+
+    if not user:
+        return {
+            "authenticated": False
+        }
+
+    return {
+        "authenticated": True,
+        "user": {
+            "username": user.get("username"),
+            "active": user.get("active", True)
+        }
+    }
+
 async def current_user(request: Request):
 
     session_token = request.cookies.get(
