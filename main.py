@@ -929,6 +929,72 @@ async def create_getip_tunnel():
             wireguard_config
         }
 
+# ============================================================
+# GETIP
+# Удаление туннеля
+# ============================================================
+
+async def delete_getip_tunnel(
+    tunnel_id
+):
+
+    getip_session = os.getenv(
+        "GETIP_PHPSESSID"
+    )
+
+    if not getip_session:
+
+        raise RuntimeError(
+            "GETIP_PHPSESSID is not configured."
+        )
+
+    async with httpx.AsyncClient(
+        timeout=30.0
+    ) as client:
+
+        response = await client.post(
+
+            "https://getip.online/api/tunnels/delete.php",
+
+            files={
+                "tunnel_id": (
+                    None,
+                    tunnel_id
+                )
+            },
+
+            headers={
+                "Cookie":
+                f"PHPSESSID={getip_session}"
+            }
+        )
+
+        try:
+
+            data = response.json()
+
+        except Exception:
+
+            raise RuntimeError(
+                "GetIP returned invalid JSON while deleting tunnel."
+            )
+
+        if response.status_code != 200:
+
+            raise RuntimeError(
+                "GetIP tunnel deletion failed: "
+                + str(data)
+            )
+
+        if not data.get("success"):
+
+            raise RuntimeError(
+                "GetIP refused to delete tunnel: "
+                + str(data)
+            )
+
+        return data
+
 @app.post("/api/devices")
 async def create_device(
     request: Request
@@ -1170,7 +1236,13 @@ async def delete_device(
             }
         )
 
-    user = await current_user(request)
+    # --------------------------------------------------------
+    # AUTHENTICATION
+    # --------------------------------------------------------
+
+    user = await current_user(
+        request
+    )
 
     if not user:
 
@@ -1182,10 +1254,13 @@ async def delete_device(
             }
         )
 
+    # --------------------------------------------------------
+    # OBJECT ID
+    # --------------------------------------------------------
 
     try:
 
-        object_id = ObjectId(
+        device_object_id = ObjectId(
             device_id
         )
 
@@ -1199,17 +1274,21 @@ async def delete_device(
             }
         )
 
-    result = await db.devices.delete_one(
+    # --------------------------------------------------------
+    # FIND DEVICE
+    # --------------------------------------------------------
+
+    device = await db.devices.find_one(
         {
             "_id":
-            object_id,
+            device_object_id,
 
             "user_id":
             user["_id"]
         }
     )
 
-    if result.deleted_count == 0:
+    if not device:
 
         return JSONResponse(
             status_code=404,
@@ -1219,12 +1298,94 @@ async def delete_device(
             }
         )
 
+    # --------------------------------------------------------
+    # GET GETIP TUNNEL ID
+    # --------------------------------------------------------
+
+    getip = device.get(
+        "getip"
+    )
+
+    tunnel_id = None
+
+    if getip:
+
+        tunnel_id = getip.get(
+            "tunnel_id"
+        )
+
+    # --------------------------------------------------------
+    # DELETE GETIP TUNNEL
+    # --------------------------------------------------------
+
+    if tunnel_id:
+
+        try:
+
+            await delete_getip_tunnel(
+                tunnel_id
+            )
+
+        except Exception as error:
+
+            print(
+                "[GETIP] Failed to delete tunnel:",
+                error
+            )
+
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "detail":
+                    "The GetIP tunnel could not be deleted. "
+                    "The device was not removed from PinVPN.",
+
+                    "error":
+                    str(error)
+                }
+            )
+
+    # --------------------------------------------------------
+    # DELETE MONGODB DEVICE
+    # --------------------------------------------------------
+
+    result = await db.devices.delete_one(
+        {
+            "_id":
+            device_object_id,
+
+            "user_id":
+            user["_id"]
+        }
+    )
+
+    if result.deleted_count != 1:
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail":
+                "Device could not be removed from database."
+            }
+        )
+
+    # --------------------------------------------------------
+    # SUCCESS
+    # --------------------------------------------------------
+
     return {
+
         "status":
         "ok",
 
         "message":
-        "Device deleted."
+        "Device and GetIP tunnel deleted successfully.",
+
+        "device_id":
+        device_id,
+
+        "tunnel_id":
+        tunnel_id
     }
 
 # ============================================================
