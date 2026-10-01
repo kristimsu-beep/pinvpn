@@ -21,150 +21,275 @@
 
 <body>
 
-    <div class="page">
+<div class="page">
 
-        <header class="navbar">
+    <header class="navbar">
 
-            <div class="logo">
-                <div class="logo-icon">P</div>
-                <span>PinVPN</span>
+        <div class="logo">
+
+            <div class="logo-icon">
+                P
             </div>
 
-            <div class="nav-status">
-                <span class="status-dot"></span>
-                <span id="serverStatus">
-                    Checking server...
+            <span>
+                PinVPN
+            </span>
+
+        </div>
+
+
+        <div
+            class="nav-status"
+            id="navStatus"
+        >
+
+            <span class="status-dot"></span>
+
+            <span>
+                Server online
+            </span>
+
+        </div>
+
+    </header>
+
+
+    <main class="hero">
+
+        <div class="hero-content">
+
+            <div class="badge">
+                🛡️ Private VPN
+            </div>
+
+
+            <h1>
+
+                Your internet.<br>
+
+                <span>
+                    Protected by PinVPN.
                 </span>
-            </div>
 
-        </header>
+            </h1>
 
 
-        <main class="hero">
+            <p class="description">
 
-            <div class="hero-content">
+                A simple and private VPN
+                service powered by WireGuard.
 
-                <div class="badge">
-                    🛡️ Private VPN
-                </div>
+            </p>
 
-                <h1>
-                    Your internet.<br>
-                    <span>Protected by PinVPN.</span>
-                </h1>
 
-                <p class="description">
-                    A simple and private VPN service
-                    powered by WireGuard.
-                </p>
+            <div class="buttons">
 
-                <div class="buttons">
+                <button
+                    class="primary-button"
+                    onclick="openAuth('register')"
+                >
+                    Get Started
+                </button>
 
-                    <button
-                        class="primary-button"
-                        onclick="startPinVPN()"
-                    >
-                        Get Started
-                    </button>
 
-                    <button
-                        class="secondary-button"
-                        onclick="checkServer()"
-                    >
-                        Check Server
-                    </button>
-
-                </div>
+                <button
+                    class="secondary-button"
+                    onclick="openAuth('login')"
+                >
+                    Sign In
+                </button>
 
             </div>
 
+        </div>
 
-            <div class="server-card">
 
-                <div class="card-header">
+        <div class="server-card">
+
+            <div class="card-header">
+
+                <span>
+                    PinVPN Server
+                </span>
+
+                <span
+                    class="online"
+                    id="cardStatus"
+                >
+                    ● Online
+                </span>
+
+            </div>
+
+
+            <div class="server-info">
+
+                <div class="info-row">
 
                     <span>
-                        PinVPN Server
+                        Location
                     </span>
 
-                    <span
-                        class="online"
-                        id="cardStatus"
-                    >
-                        ● Online
-                    </span>
+                    <strong>
+                        🇹🇼 Taipei
+                    </strong>
 
                 </div>
 
 
-                <div class="server-info">
+                <div class="info-row">
 
-                    <div class="info-row">
+                    <span>
+                        Protocol
+                    </span>
 
-                        <span>Location</span>
+                    <strong>
+                        WireGuard
+                    </strong>
 
-                        <strong>
-                            🇹🇼 Taipei
-                        </strong>
-
-                    </div>
-
-
-                    <div class="info-row">
-
-                        <span>Protocol</span>
-
-                        <strong>
-                            WireGuard
-                        </strong>
-
-                    </div>
+                </div>
 
 
-                    <div class="info-row">
+                <div class="info-row">
 
-                        <span>Network</span>
+                    <span>
+                        Network
+                    </span>
 
-                        <strong>
-                            IPv6
-                        </strong>
+                    <strong>
+                        IPv6
+                    </strong>
 
-                    </div>
+                </div>
 
 
-                    <div class="info-row">
+                <div class="info-row">
 
-                        <span>Database</span>
+                    <span>
+                        Database
+                    </span>
 
-                        <strong id="databaseStatus">
-                            Checking...
-                        </strong>
-
-                    </div>
+                    <strong id="databaseStatus">
+                        Checking...
+                    </strong>
 
                 </div>
 
             </div>
 
-        </main>
+        </div>
+
+    </main>
 
 
-        <footer>
+    <!-- AUTH MODAL -->
 
-            <span>
-                © 2026 PinVPN
-            </span>
+    <div
+        class="modal hidden"
+        id="authModal"
+    >
 
-            <span>
-                WireGuard powered
-            </span>
+        <div class="modal-box">
 
-        </footer>
+            <button
+                class="modal-close"
+                onclick="closeAuth()"
+            >
+                ×
+            </button>
+
+
+            <h2 id="authTitle">
+                Create account
+            </h2>
+
+
+            <p
+                class="modal-description"
+                id="authDescription"
+            >
+                Create your PinVPN account.
+            </p>
+
+
+            <form
+                id="authForm"
+                onsubmit="submitAuth(event)"
+            >
+
+                <label>
+                    Username
+                </label>
+
+                <input
+                    id="username"
+                    type="text"
+                    minlength="3"
+                    maxlength="30"
+                    autocomplete="username"
+                    required
+                >
+
+
+                <label>
+                    Password
+                </label>
+
+                <input
+                    id="password"
+                    type="password"
+                    minlength="8"
+                    autocomplete="current-password"
+                    required
+                >
+
+
+                <button
+                    class="primary-button auth-button"
+                    type="submit"
+                >
+                    Continue
+                </button>
+
+            </form>
+
+
+            <div
+                class="auth-message"
+                id="authMessage"
+            ></div>
+
+
+            <button
+                class="switch-auth"
+                id="switchAuth"
+                onclick="switchAuthMode()"
+            >
+                Already have an account?
+                Sign in
+            </button>
+
+        </div>
 
     </div>
 
 
-    <script src="/static/app.js"></script>
+    <footer>
+
+        <span>
+            © 2026 PinVPN
+        </span>
+
+        <span>
+            WireGuard powered
+        </span>
+
+    </footer>
+
+</div>
+
+
+<script src="/static/app.js"></script>
 
 </body>
 
