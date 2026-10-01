@@ -34,6 +34,8 @@ from cryptography.hazmat.primitives.serialization import (
 
 from bson import ObjectId
 
+import httpx
+
 # ============================================================
 # PINVPN
 # Backend
