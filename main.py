@@ -10,7 +10,8 @@ from fastapi import (
 
 from fastapi.responses import (
     HTMLResponse,
-    JSONResponse
+    JSONResponse,
+    Response
 )
 
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +21,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 import bcrypt
 
+from bson import ObjectId
 
 # ============================================================
 # PINVPN
@@ -170,6 +172,9 @@ async def index(request: Request):
         context={}
     )
 
+@app.head("/")
+async def home_head():
+    return Response(status_code=200)
 
 # ============================================================
 # HEALTH
@@ -867,7 +872,6 @@ async def delete_device(
             }
         )
 
-    from bson import ObjectId
 
     try:
 
