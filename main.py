@@ -781,6 +781,153 @@ async def get_devices(
         "devices": devices
     }
 
+# ============================================================
+# GETIP
+# Создание туннеля и получение WireGuard конфигурации
+# ============================================================
+
+async def create_getip_tunnel():
+
+    getip_session = os.getenv(
+        "GETIP_PHPSESSID"
+    )
+
+    if not getip_session:
+
+        raise RuntimeError(
+            "GETIP_PHPSESSID is not configured."
+        )
+
+    async with httpx.AsyncClient(
+        timeout=30.0
+    ) as client:
+
+        # ----------------------------------------------------
+        # 1. СОЗДАЁМ TUNNEL
+        # ----------------------------------------------------
+
+        create_response = await client.post(
+
+            "https://getip.online/api/tunnels/create.php",
+
+            files={
+                "comment": (
+                    None,
+                    "PinVPN-Device"
+                ),
+
+                "server_id": (
+                    None,
+                    "3"
+                )
+            },
+
+            headers={
+                "Cookie":
+                f"PHPSESSID={getip_session}"
+            }
+        )
+
+        try:
+
+            create_data = (
+                create_response.json()
+            )
+
+        except Exception:
+
+            raise RuntimeError(
+                "GetIP returned invalid JSON while creating tunnel."
+            )
+
+        if (
+            create_response.status_code != 200
+            or
+            not create_data.get("success")
+        ):
+
+            raise RuntimeError(
+                "GetIP tunnel creation failed: "
+                + str(create_data)
+            )
+
+        tunnel_id = create_data.get(
+            "tunnel_id"
+        )
+
+        tunnel_uuid = create_data.get(
+            "tunnel_uuid"
+        )
+
+        ipv6 = create_data.get(
+            "ipv6"
+        )
+
+        if not tunnel_id:
+
+            raise RuntimeError(
+                "GetIP did not return tunnel_id."
+            )
+
+        # ----------------------------------------------------
+        # 2. ПОЛУЧАЕМ WIREGUARD CONFIG
+        # ----------------------------------------------------
+
+        download_response = await client.get(
+
+            "https://getip.online/api/tunnels/download.php",
+
+            params={
+                "tunnel_id":
+                tunnel_id
+            },
+
+            headers={
+                "Cookie":
+                f"PHPSESSID={getip_session}"
+            }
+        )
+
+        if download_response.status_code != 200:
+
+            raise RuntimeError(
+                "GetIP tunnel was created, "
+                "but WireGuard configuration "
+                "could not be downloaded. "
+                f"HTTP {download_response.status_code}"
+            )
+
+        wireguard_config = (
+            download_response.text
+        )
+
+        # ----------------------------------------------------
+        # 3. ПРОВЕРЯЕМ CONFIG
+        # ----------------------------------------------------
+
+        if (
+            "[Interface]" not in wireguard_config
+            or
+            "[Peer]" not in wireguard_config
+        ):
+
+            raise RuntimeError(
+                "GetIP returned an invalid WireGuard configuration."
+            )
+
+        return {
+            "tunnel_id":
+            tunnel_id,
+
+            "tunnel_uuid":
+            tunnel_uuid,
+
+            "ipv6":
+            ipv6,
+
+            "config":
+            wireguard_config
+        }
 
 @app.post("/api/devices")
 async def create_device(
@@ -797,7 +944,13 @@ async def create_device(
             }
         )
 
-    user = await current_user(request)
+    # --------------------------------------------------------
+    # AUTHENTICATION
+    # --------------------------------------------------------
+
+    user = await current_user(
+        request
+    )
 
     if not user:
 
@@ -808,6 +961,10 @@ async def create_device(
                 "Authentication required."
             }
         )
+
+    # --------------------------------------------------------
+    # READ JSON
+    # --------------------------------------------------------
 
     try:
 
@@ -830,6 +987,10 @@ async def create_device(
         )
     ).strip()
 
+    # --------------------------------------------------------
+    # VALIDATE DEVICE NAME
+    # --------------------------------------------------------
+
     if not name:
 
         return JSONResponse(
@@ -850,10 +1011,17 @@ async def create_device(
             }
         )
 
+    # --------------------------------------------------------
+    # CHECK DUPLICATE NAME
+    # --------------------------------------------------------
+
     existing_device = await db.devices.find_one(
         {
-            "user_id": user["_id"],
-            "name": name
+            "user_id":
+            user["_id"],
+
+            "name":
+            name
         }
     )
 
@@ -867,48 +1035,108 @@ async def create_device(
             }
         )
 
+    # --------------------------------------------------------
+    # CREATE GETIP TUNNEL
+    # --------------------------------------------------------
+
+    try:
+
+        getip_tunnel = (
+            await create_getip_tunnel()
+        )
+
+    except Exception as error:
+
+        print(
+            "[GETIP] Device tunnel creation failed:",
+            error
+        )
+
+        return JSONResponse(
+            status_code=502,
+            content={
+                "detail":
+                "Unable to create VPN tunnel.",
+
+                "error":
+                str(error)
+            }
+        )
+
+    # --------------------------------------------------------
+    # SAVE DEVICE
+    # --------------------------------------------------------
+
     now = datetime.now(
         timezone.utc
     )
-    
-    # Generate unique WireGuard keys
-    private_key, public_key = (
-        generate_wireguard_keypair()
-    )
-    
+
     device = {
-    
+
         "user_id":
         user["_id"],
-    
+
         "name":
         name,
-    
+
         "status":
         "offline",
-    
-        "wireguard": {
-    
-            "public_key":
-            public_key,
-    
-            "private_key":
-            private_key
+
+        "getip": {
+
+            "tunnel_id":
+            getip_tunnel["tunnel_id"],
+
+            "tunnel_uuid":
+            getip_tunnel["tunnel_uuid"],
+
+            "ipv6":
+            getip_tunnel["ipv6"]
         },
-    
+
+        "wireguard": {
+
+            "config":
+            getip_tunnel["config"]
+        },
+
         "created_at":
         now
     }
 
-    result = await db.devices.insert_one(
-        device
-    )
+    try:
+
+        result = await db.devices.insert_one(
+            device
+        )
+
+    except Exception as error:
+
+        print(
+            "[MONGO] Failed to save device:",
+            error
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail":
+                "VPN tunnel was created, "
+                "but the device could not be saved."
+            }
+        )
+
+    # --------------------------------------------------------
+    # SUCCESS
+    # --------------------------------------------------------
 
     return {
+
         "status":
         "ok",
 
         "device": {
+
             "id":
             str(result.inserted_id),
 
@@ -918,11 +1146,13 @@ async def create_device(
             "status":
             "offline",
 
+            "ipv6":
+            getip_tunnel["ipv6"],
+
             "created_at":
             now.isoformat()
         }
     }
-
 
 @app.delete("/api/devices/{device_id}")
 async def delete_device(
@@ -1017,9 +1247,13 @@ async def download_wireguard_config(
             }
         )
 
-    # Check authentication
+    # --------------------------------------------------------
+    # AUTHENTICATION
+    # --------------------------------------------------------
 
-    user = await current_user(request)
+    user = await current_user(
+        request
+    )
 
     if not user:
 
@@ -1031,11 +1265,13 @@ async def download_wireguard_config(
             }
         )
 
-    # Check device ID
+    # --------------------------------------------------------
+    # CHECK OBJECT ID
+    # --------------------------------------------------------
 
     try:
 
-        object_id = ObjectId(
+        device_object_id = ObjectId(
             device_id
         )
 
@@ -1049,12 +1285,14 @@ async def download_wireguard_config(
             }
         )
 
-    # Find device belonging to current user
+    # --------------------------------------------------------
+    # FIND DEVICE
+    # --------------------------------------------------------
 
     device = await db.devices.find_one(
         {
             "_id":
-            object_id,
+            device_object_id,
 
             "user_id":
             user["_id"]
@@ -1071,7 +1309,9 @@ async def download_wireguard_config(
             }
         )
 
-    # Check WireGuard keys
+    # --------------------------------------------------------
+    # GET STORED WIREGUARD CONFIG
+    # --------------------------------------------------------
 
     wireguard = device.get(
         "wireguard"
@@ -1080,108 +1320,51 @@ async def download_wireguard_config(
     if not wireguard:
 
         return JSONResponse(
-            status_code=500,
+            status_code=404,
             content={
                 "detail":
-                "WireGuard keys are missing for this device."
+                "WireGuard configuration is not available for this device."
             }
         )
 
-    private_key = wireguard.get(
-        "private_key"
+    config = wireguard.get(
+        "config"
     )
 
-    if not private_key:
+    if not config:
 
         return JSONResponse(
-            status_code=500,
+            status_code=404,
             content={
                 "detail":
-                "WireGuard private key is missing."
+                "WireGuard configuration is not available for this device."
             }
         )
 
-    # Check GetIP configuration
-
-    if not GETIP_VPN_ADDRESS:
-
-        return JSONResponse(
-            status_code=503,
-            content={
-                "detail":
-                "GETIP_VPN_ADDRESS is not configured."
-            }
-        )
-
-    if not GETIP_VPN_DNS:
-
-        return JSONResponse(
-            status_code=503,
-            content={
-                "detail":
-                "GETIP_VPN_DNS is not configured."
-            }
-        )
-
-    if not GETIP_VPN_PUBLIC_KEY:
-
-        return JSONResponse(
-            status_code=503,
-            content={
-                "detail":
-                "GETIP_VPN_PUBLIC_KEY is not configured."
-            }
-        )
-
-    if not GETIP_VPN_ENDPOINT:
-
-        return JSONResponse(
-            status_code=503,
-            content={
-                "detail":
-                "GETIP_VPN_ENDPOINT is not configured."
-            }
-        )
-
-    # Create WireGuard configuration
-
-    config = f"""[Interface]
-PrivateKey = {private_key}
-Address = {GETIP_VPN_ADDRESS}
-DNS = {GETIP_VPN_DNS}
-
-[Peer]
-PublicKey = {GETIP_VPN_PUBLIC_KEY}
-AllowedIPs = ::/1, 8000::/1
-Endpoint = {GETIP_VPN_ENDPOINT}
-PersistentKeepalive = 25
-"""
-
-    # Safe filename
-
-    device_name = device.get(
-        "name",
-        "pinvpn-device"
-    )
-
-    safe_name = "".join(
-        character
-        if character.isalnum()
-        or character in (
-            "-",
-            "_"
-        )
-        else "_"
-        for character in device_name
-    )
+    # --------------------------------------------------------
+    # DOWNLOAD .CONF
+    # --------------------------------------------------------
 
     filename = (
-        f"PinVPN-{safe_name}.conf"
+        "PinVPN-"
+        + device.get(
+            "name",
+            "Device"
+        )
+        .replace(
+            " ",
+            "-"
+        )
+        + ".conf"
     )
 
     return Response(
+
         content=config,
-        media_type="text/plain",
+
+        media_type=
+        "application/octet-stream",
+
         headers={
             "Content-Disposition":
             f'attachment; filename="{filename}"'
