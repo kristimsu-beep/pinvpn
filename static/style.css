@@ -985,3 +985,8 @@ footer {
 #dashboard.hidden {
     display: none !important;
 }
+
+.page.dashboard-hidden {
+    display: none !important;
+}
+
