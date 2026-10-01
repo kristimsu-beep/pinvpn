@@ -18,7 +18,7 @@ from fastapi.templating import Jinja2Templates
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from passlib.context import CryptContext
+import bcrypt
 
 
 # ============================================================
@@ -51,10 +51,7 @@ app.mount(
 # PASSWORD HASHING
 # ============================================================
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
+
 
 
 # ============================================================
@@ -305,9 +302,10 @@ async def register(
 
     # Hash password
 
-    password_hash = pwd_context.hash(
-        password
-    )
+    password_hash = bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
 
 
     now = datetime.now(
@@ -400,9 +398,9 @@ async def login(
         )
 
 
-    if not pwd_context.verify(
-        password,
-        user["password_hash"]
+    if not bcrypt.checkpw(
+        password.encode("utf-8"),
+        user["password_hash"].encode("utf-8")
     ):
 
         return JSONResponse(
