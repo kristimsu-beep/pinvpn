@@ -38,6 +38,8 @@ import httpx
 
 from pydantic import BaseModel
 
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
 # ============================================================
 # PINVPN
 # Backend
@@ -48,6 +50,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+client_security = HTTPBearer()
 
 # ============================================================
 # DIRECTORIES
@@ -814,23 +817,25 @@ async def client_login(
 # ============================================================
 
 async def client_user(
-    request: Request
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = None
 ):
 
-    token = request.headers.get(
-        "Authorization"
-    )
+    token = None
+
+    # Если токен передан через Swagger / HTTPBearer
+    if credentials:
+        token = credentials.credentials
+
+    # Обычный вариант через Authorization header
+    if not token:
+        token = request.headers.get("Authorization")
+
+        if token and token.startswith("Bearer "):
+            token = token[7:]
 
     if not token:
         return None
-
-    if token.startswith(
-        "Bearer "
-    ):
-
-        token = token[
-            7:
-        ]
 
     token = token.strip()
 
@@ -839,73 +844,48 @@ async def client_user(
 
     client_token = await db.client_tokens.find_one(
         {
-            "token":
-            token,
-
-            "active":
-            True
+            "token": token,
+            "active": True
         }
     )
 
     if not client_token:
         return None
 
-    expires_at = client_token.get(
-        "expires_at"
-    )
+    expires_at = client_token.get("expires_at")
 
     if not expires_at:
-
         await db.client_tokens.delete_one(
-            {
-                "_id":
-                client_token["_id"]
-            }
+            {"_id": client_token["_id"]}
         )
-
         return None
 
     if expires_at.tzinfo is None:
-
         expires_at = expires_at.replace(
             tzinfo=timezone.utc
         )
 
-    if expires_at < datetime.now(
-        timezone.utc
-    ):
-
+    if expires_at < datetime.now(timezone.utc):
         await db.client_tokens.update_one(
+            {"_id": client_token["_id"]},
             {
-                "_id":
-                client_token["_id"]
-            },
-
-            {
-                "$set":
-                {
-                    "active":
-                    False
+                "$set": {
+                    "active": False
                 }
             }
         )
-
         return None
 
     user = await db.users.find_one(
         {
-            "_id":
-            client_token["user_id"]
+            "_id": client_token["user_id"]
         }
     )
 
     if not user:
         return None
 
-    if not user.get(
-        "active",
-        True
-    ):
+    if not user.get("active", True):
         return None
 
     return user
