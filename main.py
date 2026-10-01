@@ -111,6 +111,26 @@ MONGODB_DATABASE = os.getenv(
     "pinvpn"
 )
 
+# ============================================================
+# GETIP / WIREGUARD
+# ============================================================
+
+GETIP_VPN_ADDRESS = os.getenv(
+    "GETIP_VPN_ADDRESS"
+)
+
+GETIP_VPN_DNS = os.getenv(
+    "GETIP_VPN_DNS"
+)
+
+GETIP_VPN_PUBLIC_KEY = os.getenv(
+    "GETIP_VPN_PUBLIC_KEY"
+)
+
+GETIP_VPN_ENDPOINT = os.getenv(
+    "GETIP_VPN_ENDPOINT"
+)
+
 mongo_client = None
 db = None
 
@@ -974,4 +994,195 @@ async def delete_device(
         "message":
         "Device deleted."
     }
+
+# ============================================================
+# WIREGUARD CONFIGURATION
+# ============================================================
+
+@app.get("/api/devices/{device_id}/wireguard")
+async def download_wireguard_config(
+    device_id: str,
+    request: Request
+):
+
+    if db is None:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "Database is not connected."
+            }
+        )
+
+    # Check authentication
+
+    user = await current_user(request)
+
+    if not user:
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail":
+                "Authentication required."
+            }
+        )
+
+    # Check device ID
+
+    try:
+
+        object_id = ObjectId(
+            device_id
+        )
+
+    except Exception:
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail":
+                "Invalid device ID."
+            }
+        )
+
+    # Find device belonging to current user
+
+    device = await db.devices.find_one(
+        {
+            "_id":
+            object_id,
+
+            "user_id":
+            user["_id"]
+        }
+    )
+
+    if not device:
+
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail":
+                "Device not found."
+            }
+        )
+
+    # Check WireGuard keys
+
+    wireguard = device.get(
+        "wireguard"
+    )
+
+    if not wireguard:
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail":
+                "WireGuard keys are missing for this device."
+            }
+        )
+
+    private_key = wireguard.get(
+        "private_key"
+    )
+
+    if not private_key:
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail":
+                "WireGuard private key is missing."
+            }
+        )
+
+    # Check GetIP configuration
+
+    if not GETIP_VPN_ADDRESS:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "GETIP_VPN_ADDRESS is not configured."
+            }
+        )
+
+    if not GETIP_VPN_DNS:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "GETIP_VPN_DNS is not configured."
+            }
+        )
+
+    if not GETIP_VPN_PUBLIC_KEY:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "GETIP_VPN_PUBLIC_KEY is not configured."
+            }
+        )
+
+    if not GETIP_VPN_ENDPOINT:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "GETIP_VPN_ENDPOINT is not configured."
+            }
+        )
+
+    # Create WireGuard configuration
+
+    config = f"""[Interface]
+PrivateKey = {private_key}
+Address = {GETIP_VPN_ADDRESS}
+DNS = {GETIP_VPN_DNS}
+
+[Peer]
+PublicKey = {GETIP_VPN_PUBLIC_KEY}
+AllowedIPs = ::/1, 8000::/1
+Endpoint = {GETIP_VPN_ENDPOINT}
+PersistentKeepalive = 25
+"""
+
+    # Safe filename
+
+    device_name = device.get(
+        "name",
+        "pinvpn-device"
+    )
+
+    safe_name = "".join(
+        character
+        if character.isalnum()
+        or character in (
+            "-",
+            "_"
+        )
+        else "_"
+        for character in device_name
+    )
+
+    filename = (
+        f"PinVPN-{safe_name}.conf"
+    )
+
+    return Response(
+        content=config,
+        media_type="text/plain",
+        headers={
+            "Content-Disposition":
+            f'attachment; filename="{filename}"'
+        }
+    )
 
