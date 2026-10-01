@@ -345,12 +345,161 @@ async function submitAuth(event) {
 
 function showDashboard(user) {
 
-    alert(
-        `Welcome to PinVPN, ${user.username}!`
-    );
+    // Hide the main website
+    const mainContent = document.querySelector("main");
 
+    if (mainContent) {
+        mainContent.classList.add("hidden");
+    }
+
+    // Hide navbar
+    const navbar = document.querySelector("nav");
+
+    if (navbar) {
+        navbar.classList.add("hidden");
+    }
+
+    // Show dashboard
+    const dashboard = document.getElementById("dashboard");
+
+    if (dashboard) {
+        dashboard.classList.remove("hidden");
+    }
+
+    // Username
+    const username =
+        user.username || "User";
+
+    const usernameElement =
+        document.getElementById("dashboardUsername");
+
+    const accountUsername =
+        document.getElementById("accountUsername");
+
+    if (usernameElement) {
+        usernameElement.textContent = username;
+    }
+
+    if (accountUsername) {
+        accountUsername.textContent = username;
+    }
+
+    // Avatar
+    const avatar =
+        document.getElementById("dashboardAvatar");
+
+    if (avatar) {
+        avatar.textContent =
+            username.charAt(0).toUpperCase();
+    }
 }
 
+async function logout() {
+
+    try {
+
+        await fetch("/api/auth/logout", {
+            method: "POST",
+            credentials: "include"
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Logout error:",
+            error
+        );
+
+    }
+
+    window.location.reload();
+}
+
+
+let vpnConnected = false;
+
+
+function toggleVPN() {
+
+    const indicator =
+        document.getElementById(
+            "vpnStatusIndicator"
+        );
+
+    const statusText =
+        document.getElementById(
+            "vpnStatusText"
+        );
+
+    const description =
+        document.getElementById(
+            "vpnStatusDescription"
+        );
+
+    const button =
+        document.getElementById(
+            "connectVpnButton"
+        );
+
+    if (!vpnConnected) {
+
+        vpnConnected = true;
+
+        indicator.classList.remove(
+            "disconnected"
+        );
+
+        indicator.classList.add(
+            "connected"
+        );
+
+        statusText.textContent =
+            "CONNECTED";
+
+        description.textContent =
+            "PinVPN is ready. WireGuard configuration will be connected here.";
+
+        button.textContent =
+            "DISCONNECT";
+
+        button.classList.add(
+            "connected"
+        );
+
+    } else {
+
+        vpnConnected = false;
+
+        indicator.classList.remove(
+            "connected"
+        );
+
+        indicator.classList.add(
+            "disconnected"
+        );
+
+        statusText.textContent =
+            "DISCONNECTED";
+
+        description.textContent =
+            "Your VPN connection is currently inactive.";
+
+        button.textContent =
+            "CONNECT VPN";
+
+        button.classList.remove(
+            "connected"
+        );
+    }
+}
+
+
+function addDevice() {
+
+    alert(
+        "Device management is coming next."
+    );
+}
 
 /* ============================================================
    START
