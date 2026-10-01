@@ -113,6 +113,17 @@ async def startup():
             expireAfterSeconds=0
         )
 
+        await db.devices.create_index(
+            "user_id"
+        )
+        
+        await db.devices.create_index(
+            [
+                ("user_id", 1),
+                ("name", 1)
+            ]
+        )
+
         print(
             f"[PINVPN] MongoDB connected: "
             f"{MONGODB_DATABASE}"
@@ -626,3 +637,279 @@ async def logout(
 
 
     return response
+
+# ============================================================
+# DEVICES
+# ============================================================
+
+@app.get("/api/devices")
+async def get_devices(
+    request: Request
+):
+
+    if db is None:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "Database is not connected."
+            }
+        )
+
+    user = await current_user(request)
+
+    if not user:
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail":
+                "Authentication required."
+            }
+        )
+
+    devices = []
+
+    cursor = db.devices.find(
+        {
+            "user_id": user["_id"]
+        }
+    ).sort(
+        "created_at",
+        -1
+    )
+
+    async for device in cursor:
+
+        devices.append(
+            {
+                "id":
+                str(device["_id"]),
+
+                "name":
+                device.get(
+                    "name",
+                    "Unnamed device"
+                ),
+
+                "status":
+                device.get(
+                    "status",
+                    "offline"
+                ),
+
+                "created_at":
+                device["created_at"].isoformat()
+                if device.get("created_at")
+                else None
+            }
+        )
+
+    return {
+        "devices": devices
+    }
+
+
+@app.post("/api/devices")
+async def create_device(
+    request: Request
+):
+
+    if db is None:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "Database is not connected."
+            }
+        )
+
+    user = await current_user(request)
+
+    if not user:
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail":
+                "Authentication required."
+            }
+        )
+
+    try:
+
+        data = await request.json()
+
+    except Exception:
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail":
+                "Invalid JSON."
+            }
+        )
+
+    name = str(
+        data.get(
+            "name",
+            ""
+        )
+    ).strip()
+
+    if not name:
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail":
+                "Device name is required."
+            }
+        )
+
+    if len(name) > 50:
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail":
+                "Device name is too long."
+            }
+        )
+
+    existing_device = await db.devices.find_one(
+        {
+            "user_id": user["_id"],
+            "name": name
+        }
+    )
+
+    if existing_device:
+
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail":
+                "A device with this name already exists."
+            }
+        )
+
+    now = datetime.now(
+        timezone.utc
+    )
+
+    device = {
+
+        "user_id":
+        user["_id"],
+
+        "name":
+        name,
+
+        "status":
+        "offline",
+
+        "created_at":
+        now
+    }
+
+    result = await db.devices.insert_one(
+        device
+    )
+
+    return {
+        "status":
+        "ok",
+
+        "device": {
+            "id":
+            str(result.inserted_id),
+
+            "name":
+            name,
+
+            "status":
+            "offline",
+
+            "created_at":
+            now.isoformat()
+        }
+    }
+
+
+@app.delete("/api/devices/{device_id}")
+async def delete_device(
+    device_id: str,
+    request: Request
+):
+
+    if db is None:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "Database is not connected."
+            }
+        )
+
+    user = await current_user(request)
+
+    if not user:
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail":
+                "Authentication required."
+            }
+        )
+
+    from bson import ObjectId
+
+    try:
+
+        object_id = ObjectId(
+            device_id
+        )
+
+    except Exception:
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail":
+                "Invalid device ID."
+            }
+        )
+
+    result = await db.devices.delete_one(
+        {
+            "_id":
+            object_id,
+
+            "user_id":
+            user["_id"]
+        }
+    )
+
+    if result.deleted_count == 0:
+
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail":
+                "Device not found."
+            }
+        )
+
+    return {
+        "status":
+        "ok",
+
+        "message":
+        "Device deleted."
+    }
+
