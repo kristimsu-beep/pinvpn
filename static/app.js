@@ -345,22 +345,18 @@ async function submitAuth(event) {
 
 function showDashboard(user) {
 
-    // Hide the main website
-    const mainContent = document.querySelector("main");
+    // Completely hide the landing page,
+    // including navbar, hero and auth modal.
+    const landingPage =
+        document.getElementById("landingPage");
 
-    if (mainContent) {
-        mainContent.classList.add("hidden");
-    }
-
-    // Hide navbar
-    const navbar = document.querySelector("nav");
-
-    if (navbar) {
-        navbar.classList.add("hidden");
+    if (landingPage) {
+        landingPage.classList.add("hidden");
     }
 
     // Show dashboard
-    const dashboard = document.getElementById("dashboard");
+    const dashboard =
+        document.getElementById("dashboard");
 
     if (dashboard) {
         dashboard.classList.remove("hidden");
@@ -392,6 +388,9 @@ function showDashboard(user) {
         avatar.textContent =
             username.charAt(0).toUpperCase();
     }
+
+    // Make sure we start at the top
+    window.scrollTo(0, 0);
 }
 
 async function logout() {
