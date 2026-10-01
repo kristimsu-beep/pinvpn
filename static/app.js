@@ -384,6 +384,8 @@ function showDashboard(user) {
     }
 
     window.scrollTo(0, 0);
+
+   loadDevices();
 }
 
 
@@ -487,11 +489,342 @@ function toggleVPN() {
 }
 
 
-function addDevice() {
+// ============================================================
+// DEVICES
+// ============================================================
 
-    alert(
-        "Device management is coming next."
-    );
+async function loadDevices() {
+
+    const devicesList =
+        document.getElementById("devicesList");
+
+    if (!devicesList) {
+        return;
+    }
+
+    try {
+
+        const response = await fetch(
+            "/api/devices",
+            {
+                method: "GET",
+                credentials: "include"
+            }
+        );
+
+        if (!response.ok) {
+
+            if (response.status === 401) {
+                console.warn(
+                    "Authentication required for devices."
+                );
+            }
+
+            throw new Error(
+                "Failed to load devices."
+            );
+        }
+
+        const data = await response.json();
+
+        renderDevices(
+            data.devices || []
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Load devices error:",
+            error
+        );
+
+        devicesList.innerHTML = `
+            <div class="no-devices">
+
+                <div class="no-devices-icon">
+                    ⚠️
+                </div>
+
+                <h3>
+                    Failed to load devices
+                </h3>
+
+                <p>
+                    Please refresh the page and try again.
+                </p>
+
+            </div>
+        `;
+    }
+}
+
+
+function renderDevices(devices) {
+
+    const devicesList =
+        document.getElementById("devicesList");
+
+    if (!devicesList) {
+        return;
+    }
+
+
+    // No devices
+
+    if (!devices.length) {
+
+        devicesList.innerHTML = `
+
+            <div class="no-devices">
+
+                <div class="no-devices-icon">
+                    📱
+                </div>
+
+                <h3>
+                    No devices connected
+                </h3>
+
+                <p>
+                    Add your first device to start using PinVPN.
+                </p>
+
+                <button
+                    class="secondary-button"
+                    onclick="addDevice()"
+                >
+                    + Add device
+                </button>
+
+            </div>
+
+        `;
+
+        return;
+    }
+
+
+    // Devices exist
+
+    devicesList.innerHTML = devices.map(
+        device => {
+
+            const status =
+                device.status || "offline";
+
+            const statusText =
+                status.toUpperCase();
+
+            return `
+
+                <div
+                    class="device-item"
+                    data-device-id="${device.id}"
+                >
+
+                    <div class="device-info">
+
+                        <div class="device-icon">
+                            💻
+                        </div>
+
+                        <div>
+
+                            <div class="device-name">
+                                ${escapeHtml(device.name)}
+                            </div>
+
+                            <div
+                                class="device-status ${status}"
+                            >
+                                <span class="device-status-dot"></span>
+                                ${statusText}
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <button
+                        class="delete-device-button"
+                        onclick="deleteDevice('${device.id}')"
+                        title="Remove device"
+                    >
+                        ×
+                    </button>
+
+                </div>
+
+            `;
+
+        }
+    ).join("");
+}
+
+
+async function addDevice() {
+
+    const name =
+        prompt(
+            "Enter a name for this device:"
+        );
+
+
+    if (name === null) {
+        return;
+    }
+
+
+    const deviceName =
+        name.trim();
+
+
+    if (!deviceName) {
+
+        alert(
+            "Please enter a device name."
+        );
+
+        return;
+    }
+
+
+    if (deviceName.length > 50) {
+
+        alert(
+            "Device name cannot be longer than 50 characters."
+        );
+
+        return;
+    }
+
+
+    try {
+
+        const response = await fetch(
+            "/api/devices",
+            {
+                method: "POST",
+
+                credentials: "include",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    name: deviceName
+                })
+            }
+        );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            alert(
+                data.detail ||
+                "Failed to add device."
+            );
+
+            return;
+        }
+
+
+        await loadDevices();
+
+
+    } catch (error) {
+
+        console.error(
+            "Add device error:",
+            error
+        );
+
+        alert(
+            "Could not connect to PinVPN server."
+        );
+    }
+}
+
+
+async function deleteDevice(deviceId) {
+
+    const confirmed =
+        confirm(
+            "Remove this device from your PinVPN account?"
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    try {
+
+        const response = await fetch(
+            `/api/devices/${deviceId}`,
+            {
+                method: "DELETE",
+                credentials: "include"
+            }
+        );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            alert(
+                data.detail ||
+                "Failed to delete device."
+            );
+
+            return;
+        }
+
+
+        await loadDevices();
+
+
+    } catch (error) {
+
+        console.error(
+            "Delete device error:",
+            error
+        );
+
+        alert(
+            "Could not connect to PinVPN server."
+        );
+    }
+}
+
+
+// ============================================================
+// HTML ESCAPING
+// ============================================================
+
+function escapeHtml(value) {
+
+    return String(value)
+
+        .replaceAll("&", "&amp;")
+
+        .replaceAll("<", "&lt;")
+
+        .replaceAll(">", "&gt;")
+
+        .replaceAll('"', "&quot;")
+
+        .replaceAll("'", "&#039;");
 }
 
 /* ============================================================
