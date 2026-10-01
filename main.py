@@ -710,6 +710,482 @@ async def logout(
     return response
 
 # ============================================================
+# PINVPN CLIENT
+# Авторизация Windows / Android клиента
+# ============================================================
+
+@app.post("/api/client/login")
+async def client_login(
+    request: Request
+):
+
+    if db is None:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "Database is not connected."
+            }
+        )
+
+    try:
+
+        data = await request.json()
+
+    except Exception:
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail":
+                "Invalid JSON."
+            }
+        )
+
+    username = str(
+        data.get(
+            "username",
+            ""
+        )
+    ).strip()
+
+    password = str(
+        data.get(
+            "password",
+            ""
+        )
+    )
+
+    if not username or not password:
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail":
+                "Username and password are required."
+            }
+        )
+
+    user = await db.users.find_one(
+        {
+            "username_lower":
+            username.lower()
+        }
+    )
+
+    if not user:
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail":
+                "Invalid username or password."
+            }
+        )
+
+    if not bcrypt.checkpw(
+        password.encode("utf-8"),
+        user["password_hash"].encode("utf-8")
+    ):
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail":
+                "Invalid username or password."
+            }
+        )
+
+    if not user.get(
+        "active",
+        True
+    ):
+
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail":
+                "This account is disabled."
+            }
+        )
+
+    # --------------------------------------------------------
+    # СОЗДАЁМ CLIENT TOKEN
+    # --------------------------------------------------------
+
+    client_token = secrets.token_urlsafe(
+        48
+    )
+
+    now = datetime.now(
+        timezone.utc
+    )
+
+    expires_at = (
+        now
+        + timedelta(days=90)
+    )
+
+    await db.client_tokens.insert_one(
+        {
+            "token":
+            client_token,
+
+            "user_id":
+            user["_id"],
+
+            "created_at":
+            now,
+
+            "expires_at":
+            expires_at,
+
+            "active":
+            True
+        }
+    )
+
+    return {
+
+        "status":
+        "ok",
+
+        "token":
+        client_token,
+
+        "expires_at":
+        expires_at.isoformat(),
+
+        "user": {
+
+            "id":
+            str(user["_id"]),
+
+            "username":
+            user["username"]
+        }
+    }
+
+
+# ============================================================
+# CLIENT AUTHENTICATION
+# ============================================================
+
+async def client_user(
+    request: Request
+):
+
+    token = request.headers.get(
+        "Authorization"
+    )
+
+    if not token:
+        return None
+
+    if token.startswith(
+        "Bearer "
+    ):
+
+        token = token[
+            7:
+        ]
+
+    token = token.strip()
+
+    if not token:
+        return None
+
+    client_token = await db.client_tokens.find_one(
+        {
+            "token":
+            token,
+
+            "active":
+            True
+        }
+    )
+
+    if not client_token:
+        return None
+
+    expires_at = client_token.get(
+        "expires_at"
+    )
+
+    if not expires_at:
+
+        await db.client_tokens.delete_one(
+            {
+                "_id":
+                client_token["_id"]
+            }
+        )
+
+        return None
+
+    if expires_at.tzinfo is None:
+
+        expires_at = expires_at.replace(
+            tzinfo=timezone.utc
+        )
+
+    if expires_at < datetime.now(
+        timezone.utc
+    ):
+
+        await db.client_tokens.update_one(
+            {
+                "_id":
+                client_token["_id"]
+            },
+
+            {
+                "$set":
+                {
+                    "active":
+                    False
+                }
+            }
+        )
+
+        return None
+
+    user = await db.users.find_one(
+        {
+            "_id":
+            client_token["user_id"]
+        }
+    )
+
+    if not user:
+        return None
+
+    if not user.get(
+        "active",
+        True
+    ):
+        return None
+
+    return user
+
+# ============================================================
+# CLIENT DEVICES
+# ============================================================
+
+@app.get("/api/client/devices")
+async def client_get_devices(
+    request: Request
+):
+
+    if db is None:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "Database is not connected."
+            }
+        )
+
+    user = await client_user(
+        request
+    )
+
+    if not user:
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail":
+                "Client authentication required."
+            }
+        )
+
+    devices = []
+
+    cursor = db.devices.find(
+        {
+            "user_id":
+            user["_id"]
+        }
+    ).sort(
+        "created_at",
+        -1
+    )
+
+    async for device in cursor:
+
+        devices.append(
+            {
+                "id":
+                str(device["_id"]),
+
+                "name":
+                device.get(
+                    "name",
+                    "Unnamed device"
+                ),
+
+                "status":
+                device.get(
+                    "status",
+                    "offline"
+                ),
+
+                "ipv6":
+                device.get(
+                    "getip",
+                    {}
+                ).get(
+                    "ipv6"
+                ),
+
+                "created_at":
+                device["created_at"].isoformat()
+                if device.get("created_at")
+                else None
+            }
+        )
+
+    return {
+        "status":
+        "ok",
+
+        "devices":
+        devices
+    }
+
+# ============================================================
+# CLIENT WIREGUARD CONFIG
+# ============================================================
+
+@app.get(
+    "/api/client/devices/{device_id}/wireguard"
+)
+async def client_get_wireguard_config(
+    device_id: str,
+    request: Request
+):
+
+    if db is None:
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "Database is not connected."
+            }
+        )
+
+    user = await client_user(
+        request
+    )
+
+    if not user:
+
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail":
+                "Client authentication required."
+            }
+        )
+
+    try:
+
+        device_object_id = ObjectId(
+            device_id
+        )
+
+    except Exception:
+
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail":
+                "Invalid device ID."
+            }
+        )
+
+    device = await db.devices.find_one(
+        {
+            "_id":
+            device_object_id,
+
+            "user_id":
+            user["_id"]
+        }
+    )
+
+    if not device:
+
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail":
+                "Device not found."
+            }
+        )
+
+    wireguard = device.get(
+        "wireguard"
+    )
+
+    if not wireguard:
+
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail":
+                "WireGuard configuration is not available."
+            }
+        )
+
+    config = wireguard.get(
+        "config"
+    )
+
+    if not config:
+
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail":
+                "WireGuard configuration is not available."
+            }
+        )
+
+    return {
+
+        "status":
+        "ok",
+
+        "device": {
+
+            "id":
+            str(device["_id"]),
+
+            "name":
+            device.get(
+                "name",
+                "Device"
+            ),
+
+            "ipv6":
+            device.get(
+                "getip",
+                {}
+            ).get(
+                "ipv6"
+            )
+        },
+
+        "wireguard_config":
+        config
+    }
+
+# ============================================================
 # DEVICES
 # ============================================================
 
@@ -1180,6 +1656,32 @@ async def create_device(
             "[MONGO] Failed to save device:",
             error
         )
+
+        # ====================================================
+        # ROLLBACK
+        # Если MongoDB не смогла сохранить устройство,
+        # удаляем уже созданный туннель GetIP.
+        # ====================================================
+
+        try:
+
+            await delete_getip_tunnel(
+                getip_tunnel["tunnel_id"]
+            )
+
+            print(
+                "[GETIP] Rollback successful. "
+                "Orphan tunnel deleted:",
+                getip_tunnel["tunnel_id"]
+            )
+
+        except Exception as rollback_error:
+
+            print(
+                "[GETIP] CRITICAL: "
+                "Could not rollback tunnel:",
+                rollback_error
+            )
 
         return JSONResponse(
             status_code=500,
