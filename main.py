@@ -514,17 +514,21 @@ async def current_user(request: Request):
 
     if not expires_at:
         await db.sessions.delete_one(
-            {"_id": session["_id"]}
+            {
+                "_id": session["_id"]
+            }
         )
+
         return None
 
-    # MongoDB returns naive UTC datetimes.
-    # Make them timezone-aware before comparison.
+    # MongoDB может вернуть datetime без timezone.
+    # Приводим его к UTC.
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(
             tzinfo=timezone.utc
         )
 
+    # Проверяем срок действия сессии.
     if expires_at < datetime.now(timezone.utc):
 
         await db.sessions.delete_one(
@@ -535,6 +539,7 @@ async def current_user(request: Request):
 
         return None
 
+    # Находим аккаунт пользователя.
     user = await db.users.find_one(
         {
             "_id": session["user_id"]
@@ -550,6 +555,7 @@ async def current_user(request: Request):
 
         return None
 
+    # Если аккаунт отключён.
     if not user.get("active", True):
         return None
 
