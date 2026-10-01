@@ -978,3 +978,10 @@ footer {
     }
 }
 
+#landingPage.hidden {
+    display: none !important;
+}
+
+#dashboard.hidden {
+    display: none !important;
+}
