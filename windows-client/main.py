@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 # PINVPN SERVER
 # ============================================================
 
-SERVER_URL = "https://pinnogram-server.onrender.com"
+SERVER_URL = "https://pinvpn.onrender.com"
 
 
 # ============================================================
