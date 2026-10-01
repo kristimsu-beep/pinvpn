@@ -558,7 +558,6 @@ async function loadDevices() {
     }
 }
 
-
 function renderDevices(devices) {
 
     const devicesList =
@@ -645,13 +644,26 @@ function renderDevices(devices) {
 
                     </div>
 
-                    <button
-                        class="delete-device-button"
-                        onclick="deleteDevice('${device.id}')"
-                        title="Remove device"
-                    >
-                        ×
-                    </button>
+
+                    <div class="device-actions">
+
+                        <button
+                            class="download-config-button"
+                            onclick="downloadWireGuardConfig('${device.id}')"
+                            title="Download WireGuard configuration"
+                        >
+                            ↓ Download .conf
+                        </button>
+
+                        <button
+                            class="delete-device-button"
+                            onclick="deleteDevice('${device.id}')"
+                            title="Remove device"
+                        >
+                            ×
+                        </button>
+
+                    </div>
 
                 </div>
 
@@ -661,6 +673,81 @@ function renderDevices(devices) {
     ).join("");
 }
 
+async function downloadWireGuardConfig(deviceId) {
+
+    try {
+
+        const response = await fetch(
+            `/api/devices/${deviceId}/wireguard`,
+            {
+                method: "GET",
+                credentials: "include"
+            }
+        );
+
+
+        if (!response.ok) {
+
+            let message =
+                "Failed to download WireGuard configuration.";
+
+            try {
+
+                const data =
+                    await response.json();
+
+                if (data.detail) {
+                    message = data.detail;
+                }
+
+            } catch (error) {
+                // Ignore JSON parsing error
+            }
+
+            alert(message);
+
+            return;
+        }
+
+
+        const blob =
+            await response.blob();
+
+
+        const url =
+            window.URL.createObjectURL(blob);
+
+
+        const link =
+            document.createElement("a");
+
+        link.href = url;
+
+        link.download =
+            "PinVPN-WireGuard.conf";
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.remove();
+
+        window.URL.revokeObjectURL(url);
+
+
+    } catch (error) {
+
+        console.error(
+            "WireGuard download error:",
+            error
+        );
+
+        alert(
+            "Unable to download WireGuard configuration."
+        );
+
+    }
+}
 
 async function addDevice() {
 
