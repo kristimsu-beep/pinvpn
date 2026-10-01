@@ -1,7 +1,8 @@
+
 fastapi
 uvicorn[standard]
 motor
 python-dotenv
 jinja2
-passlib[bcrypt]
+bcrypt
 python-multipart
