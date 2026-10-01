@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>PinVPN</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/style.css"
+    >
+
+</head>
+
+<body>
+
+    <div class="page">
+
+        <header class="navbar">
+
+            <div class="logo">
+                <div class="logo-icon">P</div>
+                <span>PinVPN</span>
+            </div>
+
+            <div class="nav-status">
+                <span class="status-dot"></span>
+                <span id="serverStatus">
+                    Checking server...
+                </span>
+            </div>
+
+        </header>
+
+
+        <main class="hero">
+
+            <div class="hero-content">
+
+                <div class="badge">
+                    🛡️ Private VPN
+                </div>
+
+                <h1>
+                    Your internet.<br>
+                    <span>Protected by PinVPN.</span>
+                </h1>
+
+                <p class="description">
+                    A simple and private VPN service
+                    powered by WireGuard.
+                </p>
+
+                <div class="buttons">
+
+                    <button
+                        class="primary-button"
+                        onclick="startPinVPN()"
+                    >
+                        Get Started
+                    </button>
+
+                    <button
+                        class="secondary-button"
+                        onclick="checkServer()"
+                    >
+                        Check Server
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="server-card">
+
+                <div class="card-header">
+
+                    <span>
+                        PinVPN Server
+                    </span>
+
+                    <span
+                        class="online"
+                        id="cardStatus"
+                    >
+                        ● Online
+                    </span>
+
+                </div>
+
+
+                <div class="server-info">
+
+                    <div class="info-row">
+
+                        <span>Location</span>
+
+                        <strong>
+                            🇹🇼 Taipei
+                        </strong>
+
+                    </div>
+
+
+                    <div class="info-row">
+
+                        <span>Protocol</span>
+
+                        <strong>
+                            WireGuard
+                        </strong>
+
+                    </div>
+
+
+                    <div class="info-row">
+
+                        <span>Network</span>
+
+                        <strong>
+                            IPv6
+                        </strong>
+
+                    </div>
+
+
+                    <div class="info-row">
+
+                        <span>Database</span>
+
+                        <strong id="databaseStatus">
+                            Checking...
+                        </strong>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </main>
+
+
+        <footer>
+
+            <span>
+                © 2026 PinVPN
+            </span>
+
+            <span>
+                WireGuard powered
+            </span>
+
+        </footer>
+
+    </div>
+
+
+    <script src="/static/app.js"></script>
+
+</body>
+
+</html>
