@@ -8,7 +8,6 @@ from fastapi import (
     Form
 )
 
-
 from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
@@ -36,6 +35,8 @@ from cryptography.hazmat.primitives.serialization import (
 from bson import ObjectId
 
 import httpx
+
+from pydantic import BaseModel
 
 # ============================================================
 # PINVPN
