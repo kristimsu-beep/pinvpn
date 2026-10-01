@@ -540,3 +540,441 @@ footer {
 
     font-size: 14px;
 }
+
+/* =========================
+   PINVPN DASHBOARD
+========================= */
+
+.hidden {
+    display: none !important;
+}
+
+.dashboard {
+    min-height: 100vh;
+    padding: 40px 6%;
+    background:
+        radial-gradient(
+            circle at top right,
+            rgba(0, 180, 255, 0.10),
+            transparent 35%
+        ),
+        #05070b;
+    color: #ffffff;
+}
+
+
+/* HEADER */
+
+.dashboard-header {
+    max-width: 1200px;
+    margin: 0 auto 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 30px;
+}
+
+.dashboard-brand {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
+}
+
+.brand-pin {
+    color: #ffffff;
+}
+
+.brand-vpn {
+    color: #00c8ff;
+}
+
+.dashboard-subtitle {
+    margin-top: 5px;
+    color: #7d8795;
+    font-size: 14px;
+}
+
+
+/* USER */
+
+.dashboard-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-avatar {
+    width: 42px;
+    height: 42px;
+
+    border-radius: 50%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #00c8ff;
+    color: #001018;
+
+    font-weight: 800;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-info strong {
+    font-size: 14px;
+}
+
+.user-info span {
+    font-size: 12px;
+    color: #717b89;
+}
+
+.logout-button {
+    margin-left: 12px;
+
+    border: 1px solid #28303b;
+    background: transparent;
+    color: #9aa4b2;
+
+    padding: 9px 14px;
+    border-radius: 8px;
+
+    cursor: pointer;
+
+    transition: 0.2s;
+}
+
+.logout-button:hover {
+    border-color: #ff4d67;
+    color: #ff4d67;
+}
+
+
+/* GRID */
+
+.dashboard-grid {
+    max-width: 1200px;
+    margin: auto;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 20px;
+}
+
+
+/* CARD */
+
+.dashboard-card {
+    background: rgba(12, 16, 23, 0.92);
+
+    border: 1px solid #202733;
+
+    border-radius: 18px;
+
+    padding: 26px;
+
+    box-shadow:
+        0 15px 50px rgba(0, 0, 0, 0.25);
+}
+
+.card-title {
+    color: #687383;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    letter-spacing: 1.5px;
+
+    margin-bottom: 25px;
+}
+
+
+/* VPN STATUS */
+
+.vpn-status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    margin-bottom: 30px;
+}
+
+.status-indicator {
+    width: 18px;
+    height: 18px;
+
+    border-radius: 50%;
+
+    flex-shrink: 0;
+}
+
+.status-indicator.disconnected {
+    background: #ff4d67;
+
+    box-shadow:
+        0 0 18px rgba(255, 77, 103, 0.45);
+}
+
+.status-indicator.connected {
+    background: #25e88a;
+
+    box-shadow:
+        0 0 18px rgba(37, 232, 138, 0.5);
+}
+
+.vpn-status-text {
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.vpn-status-description {
+    margin-top: 5px;
+
+    color: #6f7988;
+
+    font-size: 13px;
+}
+
+.connect-button {
+    width: 100%;
+
+    border: none;
+
+    border-radius: 11px;
+
+    padding: 15px;
+
+    background: #00c8ff;
+
+    color: #001018;
+
+    font-weight: 800;
+
+    cursor: pointer;
+
+    transition: 0.2s;
+}
+
+.connect-button:hover {
+    transform: translateY(-1px);
+
+    box-shadow:
+        0 8px 25px rgba(0, 200, 255, 0.25);
+}
+
+.connect-button.connected {
+    background: #25e88a;
+}
+
+
+/* SERVER */
+
+.server-large {
+    display: flex;
+    align-items: center;
+
+    gap: 18px;
+}
+
+.server-flag {
+    font-size: 42px;
+}
+
+.server-information {
+    flex: 1;
+}
+
+.server-information h2 {
+    margin: 0;
+
+    font-size: 22px;
+}
+
+.server-information p {
+    margin: 5px 0 10px;
+
+    color: #737d8c;
+}
+
+.server-protocol {
+    display: inline-block;
+
+    padding: 5px 9px;
+
+    border-radius: 6px;
+
+    background: #151c25;
+
+    color: #8d98a8;
+
+    font-size: 11px;
+}
+
+.server-online {
+    color: #25e88a;
+
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.server-online span {
+    display: inline-block;
+
+    width: 7px;
+    height: 7px;
+
+    margin-right: 5px;
+
+    border-radius: 50%;
+
+    background: #25e88a;
+}
+
+
+/* ACCOUNT */
+
+.account-row {
+    display: flex;
+    justify-content: space-between;
+
+    padding: 14px 0;
+
+    border-bottom: 1px solid #1d242e;
+
+    color: #727d8d;
+
+    font-size: 13px;
+}
+
+.account-row:last-child {
+    border-bottom: none;
+}
+
+.account-row strong {
+    color: #ffffff;
+}
+
+.account-active {
+    color: #25e88a !important;
+}
+
+
+/* DEVICES */
+
+.devices-card {
+    grid-column: 1 / -1;
+}
+
+.devices-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.add-device-button {
+    border: 1px solid #26303c;
+
+    background: #10161e;
+
+    color: #00c8ff;
+
+    padding: 8px 12px;
+
+    border-radius: 8px;
+
+    cursor: pointer;
+}
+
+.add-device-button:hover {
+    background: #151e28;
+}
+
+.no-devices {
+    text-align: center;
+
+    padding: 35px 20px;
+
+    border: 1px dashed #252e39;
+
+    border-radius: 12px;
+}
+
+.no-devices-icon {
+    font-size: 38px;
+
+    margin-bottom: 10px;
+}
+
+.no-devices h3 {
+    margin: 0 0 7px;
+
+    font-size: 16px;
+}
+
+.no-devices p {
+    margin: 0 0 20px;
+
+    color: #687383;
+
+    font-size: 13px;
+}
+
+.secondary-button {
+    border: 1px solid #28313d;
+
+    background: transparent;
+
+    color: #ffffff;
+
+    padding: 10px 16px;
+
+    border-radius: 8px;
+
+    cursor: pointer;
+}
+
+.secondary-button:hover {
+    border-color: #00c8ff;
+    color: #00c8ff;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 800px) {
+
+    .dashboard {
+        padding: 25px 18px;
+    }
+
+    .dashboard-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .devices-card {
+        grid-column: auto;
+    }
+
+    .dashboard-user {
+        width: 100%;
+    }
+
+    .logout-button {
+        margin-left: auto;
+    }
+}
+
