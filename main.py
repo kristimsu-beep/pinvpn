@@ -477,7 +477,7 @@ async def login(
     response.set_cookie(
         key="pinvpn_session",
         value=session_token,
-        max_age=30 * 24 * 60 * 60,
+        max_age=60 * 60 * 24 * 30,
         httponly=True,
         secure=True,
         samesite="lax"
