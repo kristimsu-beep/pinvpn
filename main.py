@@ -492,105 +492,68 @@ async def login(
 # ============================================================
 
 @app.get("/api/auth/me")
-async def current_user(
-    request: Request
-):
+async def current_user(request: Request):
 
-    if db is None:
-
-        return JSONResponse(
-            status_code=503,
-            content={
-                "detail":
-                "Database is not connected."
-            }
-        )
-
-
-    token = request.cookies.get(
+    session_token = request.cookies.get(
         "pinvpn_session"
     )
 
-
-    if not token:
-
-        return {
-            "authenticated":
-            False
-        }
-
+    if not session_token:
+        return None
 
     session = await db.sessions.find_one(
         {
-            "token":
-            token
+            "token": session_token
         }
     )
 
-
     if not session:
+        return None
 
-        return {
-            "authenticated":
-            False
-        }
+    expires_at = session.get("expires_at")
 
+    if not expires_at:
+        await db.sessions.delete_one(
+            {"_id": session["_id"]}
+        )
+        return None
 
-    if session["expires_at"] < datetime.now(
-        timezone.utc
-    ):
+    # MongoDB returns naive UTC datetimes.
+    # Make them timezone-aware before comparison.
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(
+            tzinfo=timezone.utc
+        )
+
+    if expires_at < datetime.now(timezone.utc):
 
         await db.sessions.delete_one(
             {
-                "_id":
-                session["_id"]
+                "_id": session["_id"]
             }
         )
 
-        return {
-            "authenticated":
-            False
-        }
-
+        return None
 
     user = await db.users.find_one(
         {
-            "_id":
-            session["user_id"]
+            "_id": session["user_id"]
         }
     )
 
-
     if not user:
+        await db.sessions.delete_one(
+            {
+                "_id": session["_id"]
+            }
+        )
 
-        return {
-            "authenticated":
-            False
-        }
+        return None
 
+    if not user.get("active", True):
+        return None
 
-    return {
-        "authenticated":
-        True,
-
-        "user": {
-            "id":
-            str(user["_id"]),
-
-            "username":
-            user["username"],
-
-            "created_at":
-            user["created_at"].isoformat(),
-
-            "active":
-            user.get(
-                "active",
-                True
-            )
-        }
-    }
-
+    return user
 
 # ============================================================
 # LOGOUT
