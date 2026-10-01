@@ -498,11 +498,41 @@ function addDevice() {
    START
 ============================================================ */
 
-document.addEventListener(
-    "DOMContentLoaded",
-    () => {
+document.addEventListener("DOMContentLoaded", async () => {
 
-        checkServer();
+    await checkServer();
+
+    try {
+
+        const response = await fetch(
+            "/api/auth/me",
+            {
+                method: "GET",
+                credentials: "include"
+            }
+        );
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        if (
+            data &&
+            data.authenticated &&
+            data.user
+        ) {
+            showDashboard(data.user);
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Session restore error:",
+            error
+        );
 
     }
-);
+
+});
