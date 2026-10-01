@@ -21,6 +21,17 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 import bcrypt
 
+from cryptography.hazmat.primitives.asymmetric.x25519 import (
+    X25519PrivateKey
+)
+
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PrivateFormat,
+    PublicFormat,
+    NoEncryption
+)
+
 from bson import ObjectId
 
 # ============================================================
@@ -53,8 +64,41 @@ app.mount(
 # PASSWORD HASHING
 # ============================================================
 
+# ============================================================
+# WIREGUARD KEY GENERATION
+# ============================================================
 
+def generate_wireguard_keypair():
 
+    private_key = X25519PrivateKey.generate()
+
+    public_key = private_key.public_key()
+
+    private_bytes = private_key.private_bytes(
+        Encoding.Raw,
+        PrivateFormat.Raw,
+        NoEncryption()
+    )
+
+    public_bytes = public_key.public_bytes(
+        Encoding.Raw,
+        PublicFormat.Raw
+    )
+
+    import base64
+
+    private_key_base64 = base64.b64encode(
+        private_bytes
+    ).decode("ascii")
+
+    public_key_base64 = base64.b64encode(
+        public_bytes
+    ).decode("ascii")
+
+    return (
+        private_key_base64,
+        public_key_base64
+    )
 
 # ============================================================
 # MONGODB
@@ -804,18 +848,32 @@ async def create_device(
     now = datetime.now(
         timezone.utc
     )
-
+    
+    # Generate unique WireGuard keys
+    private_key, public_key = (
+        generate_wireguard_keypair()
+    )
+    
     device = {
-
+    
         "user_id":
         user["_id"],
-
+    
         "name":
         name,
-
+    
         "status":
         "offline",
-
+    
+        "wireguard": {
+    
+            "public_key":
+            public_key,
+    
+            "private_key":
+            private_key
+        },
+    
         "created_at":
         now
     }
