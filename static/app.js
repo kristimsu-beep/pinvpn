@@ -345,16 +345,12 @@ async function submitAuth(event) {
 
 function showDashboard(user) {
 
-    // Completely hide the landing page,
-    // including navbar, hero and auth modal.
-    const landingPage =
-        document.getElementById("landingPage");
+    const page = document.querySelector(".page");
 
-    if (landingPage) {
-        landingPage.classList.add("hidden");
+    if (page) {
+        page.classList.add("dashboard-hidden");
     }
 
-    // Show dashboard
     const dashboard =
         document.getElementById("dashboard");
 
@@ -362,7 +358,6 @@ function showDashboard(user) {
         dashboard.classList.remove("hidden");
     }
 
-    // Username
     const username =
         user.username || "User";
 
@@ -380,7 +375,6 @@ function showDashboard(user) {
         accountUsername.textContent = username;
     }
 
-    // Avatar
     const avatar =
         document.getElementById("dashboardAvatar");
 
@@ -389,9 +383,9 @@ function showDashboard(user) {
             username.charAt(0).toUpperCase();
     }
 
-    // Make sure we start at the top
     window.scrollTo(0, 0);
 }
+
 
 async function logout() {
 
