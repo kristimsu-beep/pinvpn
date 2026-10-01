@@ -3,3 +3,5 @@ uvicorn[standard]
 motor
 python-dotenv
 jinja2
+passlib[bcrypt]
+python-multipart
