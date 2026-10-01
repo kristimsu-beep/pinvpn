@@ -956,11 +956,9 @@ async def delete_getip_tunnel(
 
             "https://getip.online/api/tunnels/delete.php",
 
-            files={
-                "tunnel_id": (
-                    None,
-                    tunnel_id
-                )
+            json={
+                "tunnel_id":
+                tunnel_id
             },
 
             headers={
