@@ -2,6 +2,7 @@ import sys
 import os
 import subprocess
 import tempfile
+import ctypes
 import requests
 
 from PySide6.QtCore import Qt
@@ -37,6 +38,40 @@ WG_TEMP_CONFIG = os.path.join(
 
 
 # ============================================================
+# ADMINISTRATOR HELPER
+# ============================================================
+
+def run_as_admin(command):
+    """
+    Запускает команду через UAC Windows.
+    """
+
+    command_line = subprocess.list2cmdline(
+        command
+    )
+
+    result = ctypes.windll.shell32.ShellExecuteW(
+        None,
+        "runas",
+        command[0],
+        command_line[
+            len(command[0]) + 1:
+        ],
+        None,
+        1,
+    )
+
+    if result <= 32:
+
+        raise Exception(
+            "Windows не смог предоставить "
+            "права администратора."
+        )
+
+    return result
+
+
+# ============================================================
 # MAIN WINDOW
 # ============================================================
 
@@ -66,11 +101,18 @@ class PinVPN(QWidget):
         layout = QVBoxLayout()
 
         layout.setSpacing(14)
-        layout.setContentsMargins(35, 35, 35, 35)
+        layout.setContentsMargins(
+            35,
+            35,
+            35,
+            35
+        )
 
         title = QLabel("PinVPN")
 
-        title.setAlignment(Qt.AlignCenter)
+        title.setAlignment(
+            Qt.AlignCenter
+        )
 
         title.setStyleSheet(
             """
@@ -79,9 +121,13 @@ class PinVPN(QWidget):
             """
         )
 
-        subtitle = QLabel("Secure VPN")
+        subtitle = QLabel(
+            "Secure VPN"
+        )
 
-        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setAlignment(
+            Qt.AlignCenter
+        )
 
         subtitle.setStyleSheet(
             """
@@ -201,53 +247,37 @@ class PinVPN(QWidget):
 
             QLineEdit,
             QComboBox {
-
                 background: #1a1c22;
-
                 border: 1px solid #30333b;
-
                 border-radius: 9px;
-
                 padding: 11px;
-
                 color: white;
             }
 
             QLineEdit:focus,
             QComboBox:focus {
-
                 border: 1px solid #e91e63;
             }
 
             QPushButton {
-
                 background: #e91e63;
-
                 border: none;
-
                 border-radius: 9px;
-
                 padding: 12px;
-
                 color: white;
-
                 font-weight: bold;
             }
 
             QPushButton:hover {
-
                 background: #f22970;
             }
 
             QPushButton:pressed {
-
                 background: #c91652;
             }
 
             QPushButton:disabled {
-
                 background: #35373e;
-
                 color: #888;
             }
 
@@ -345,7 +375,7 @@ class PinVPN(QWidget):
 
                     "Ошибка",
 
-                    "Сервер не вернул токен.",
+                    "Сервер не вернул токен."
                 )
 
                 return
@@ -507,7 +537,10 @@ class PinVPN(QWidget):
     # GET WIREGUARD CONFIG
     # ========================================================
 
-    def get_wireguard_config(self, device):
+    def get_wireguard_config(
+        self,
+        device
+    ):
 
         device_id = (
             device.get("id")
@@ -517,7 +550,8 @@ class PinVPN(QWidget):
         if not device_id:
 
             raise Exception(
-                "У выбранного устройства отсутствует ID."
+                "У выбранного устройства "
+                "отсутствует ID."
             )
 
         response = requests.get(
@@ -536,6 +570,7 @@ class PinVPN(QWidget):
         if response.status_code != 200:
 
             raise Exception(
+
                 "Сервер не смог вернуть "
                 "WireGuard-конфигурацию.\n\n"
                 f"HTTP {response.status_code}\n"
@@ -565,12 +600,6 @@ class PinVPN(QWidget):
 
         if not self.token:
 
-            QMessageBox.warning(
-                self,
-                "PinVPN",
-                "Сначала войдите в аккаунт."
-            )
-
             return
 
         device = (
@@ -597,32 +626,21 @@ class PinVPN(QWidget):
 
         try:
 
-            # ------------------------------------------------
-            # Проверяем WireGuard
-            # ------------------------------------------------
-
             if not os.path.exists(
                 WIREGUARD_EXE
             ):
 
                 raise Exception(
                     "WireGuard не найден.\n\n"
-                    "Ожидаемый путь:\n"
                     f"{WIREGUARD_EXE}"
                 )
 
-            # ------------------------------------------------
             # Получаем конфигурацию
-            # ------------------------------------------------
-
             config = self.get_wireguard_config(
                 device
             )
 
-            # ------------------------------------------------
-            # Сохраняем конфигурацию
-            # ------------------------------------------------
-
+            # Сохраняем её
             with open(
                 WG_TEMP_CONFIG,
                 "w",
@@ -636,48 +654,17 @@ class PinVPN(QWidget):
             )
 
             self.status.setText(
-                "Статус: Подключение..."
+                "Статус: Ожидание разрешения Windows..."
             )
 
-            # ------------------------------------------------
-            # Запускаем WireGuard
-            #
-            # /installtunnelservice
-            # создаёт сервис туннеля Windows.
-            # ------------------------------------------------
-
-            result = subprocess.run(
-
+            # Запрашиваем права администратора
+            run_as_admin(
                 [
                     WIREGUARD_EXE,
                     "/installtunnelservice",
                     WG_TEMP_CONFIG,
-                ],
-
-                capture_output=True,
-
-                text=True,
-
-                timeout=30,
+                ]
             )
-
-            # ------------------------------------------------
-            # Проверяем результат
-            # ------------------------------------------------
-
-            if result.returncode != 0:
-
-                error_text = (
-                    result.stderr
-                    or result.stdout
-                    or "Неизвестная ошибка WireGuard."
-                )
-
-                raise Exception(
-                    "WireGuard не смог "
-                    "запустить туннель.\n\n"
-                    f"{error_text}"
-                )
 
             self.connected = True
 
@@ -696,11 +683,8 @@ class PinVPN(QWidget):
             )
 
             QMessageBox.critical(
-
                 self,
-
                 "PinVPN",
-
                 str(error)
             )
 
@@ -726,25 +710,13 @@ class PinVPN(QWidget):
 
         try:
 
-            if self.current_config_path:
-
-                result = subprocess.run(
-
-                    [
-                        WIREGUARD_EXE,
-                        "/uninstalltunnelservice",
-                        "pinvpn",
-                    ],
-
-                    capture_output=True,
-
-                    text=True,
-
-                    timeout=30,
-                )
-
-                # Если сервис уже отсутствует,
-                # считаем VPN отключённым.
+            run_as_admin(
+                [
+                    WIREGUARD_EXE,
+                    "/uninstalltunnelservice",
+                    "pinvpn",
+                ]
+            )
 
             self.connected = False
 
@@ -759,11 +731,8 @@ class PinVPN(QWidget):
         except Exception as error:
 
             QMessageBox.warning(
-
                 self,
-
                 "PinVPN",
-
                 (
                     "Не удалось отключить VPN:\n\n"
                     f"{error}"
@@ -782,27 +751,9 @@ class PinVPN(QWidget):
 
     def closeEvent(self, event):
 
-        if self.connected:
-
-            try:
-
-                subprocess.run(
-
-                    [
-                        WIREGUARD_EXE,
-                        "/uninstalltunnelservice",
-                        "pinvpn",
-                    ],
-
-                    capture_output=True,
-
-                    text=True,
-
-                    timeout=15,
-                )
-
-            except Exception:
-                pass
+        # Не отключаем VPN автоматически при
+        # закрытии окна. VPN может продолжать
+        # работать в фоновом режиме.
 
         event.accept()
 
