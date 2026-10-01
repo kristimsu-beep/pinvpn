@@ -5,7 +5,8 @@ from datetime import datetime, timezone, timedelta
 from fastapi import (
     FastAPI,
     Request,
-    Form
+    Form,
+    Depends
 )
 
 from fastapi.responses import (
@@ -896,7 +897,8 @@ async def client_user(
 
 @app.get("/api/client/devices")
 async def client_get_devices(
-    request: Request
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(client_security)
 ):
 
     if db is None:
@@ -910,7 +912,8 @@ async def client_get_devices(
         )
 
     user = await client_user(
-        request
+        request,
+        credentials
     )
 
     if not user:
@@ -986,7 +989,8 @@ async def client_get_devices(
 )
 async def client_get_wireguard_config(
     device_id: str,
-    request: Request
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(client_security)
 ):
 
     if db is None:
@@ -1000,7 +1004,8 @@ async def client_get_wireguard_config(
         )
 
     user = await client_user(
-        request
+        request,
+        credentials
     )
 
     if not user:
