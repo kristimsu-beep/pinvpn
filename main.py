@@ -1186,3 +1186,99 @@ PersistentKeepalive = 25
         }
     )
 
+# ============================================================
+# GETIP TEST
+# ============================================================
+
+@app.post("/api/getip/test")
+async def test_getip_tunnel():
+
+    getip_session = os.getenv(
+        "GETIP_PHPSESSID"
+    )
+
+    if not getip_session:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail":
+                "GETIP_PHPSESSID is not configured."
+            }
+        )
+
+    try:
+
+        async with httpx.AsyncClient(
+            timeout=30.0
+        ) as client:
+
+            response = await client.post(
+                "https://getip.online./api/tunnels/create.php",
+
+                files={
+                    "comment": (
+                        None,
+                        "PinVPN-Auto-Test"
+                    ),
+                    "server_id": (
+                        None,
+                        "3"
+                    )
+                },
+
+                headers={
+                    "Cookie":
+                    f"PHPSESSID={getip_session}"
+                }
+            )
+
+        try:
+            data = response.json()
+
+        except Exception:
+
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "detail":
+                    "GetIP returned invalid JSON.",
+                    "status_code":
+                    response.status_code,
+                    "response":
+                    response.text[:1000]
+                }
+            )
+
+        if response.status_code != 200:
+
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "detail":
+                    "GetIP tunnel creation failed.",
+                    "getip_status":
+                    response.status_code,
+                    "getip_response":
+                    data
+                }
+            )
+
+        return {
+            "status":
+            "ok",
+
+            "getip":
+            data
+        }
+
+    except Exception as error:
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail":
+                "GetIP request failed.",
+                "error":
+                str(error)
+            }
+        )
