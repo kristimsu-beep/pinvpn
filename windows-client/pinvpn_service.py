@@ -1,3 +1,4 @@
+import sys
 import json
 import os
 import re
@@ -878,6 +879,18 @@ class PinVPNService(
 
 if __name__ == "__main__":
 
-    win32serviceutil.HandleCommandLine(
-        PinVPNService
-    )
+    if len(sys.argv) == 1:
+
+        servicemanager.Initialize()
+
+        servicemanager.PrepareToHostSingle(
+            PinVPNService
+        )
+
+        servicemanager.StartServiceCtrlDispatcher()
+
+    else:
+
+        win32serviceutil.HandleCommandLine(
+            PinVPNService
+        )
