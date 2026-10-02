@@ -1,5 +1,5 @@
 #define MyAppName "PinVPN"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "PinVPN"
 
 #define MyAppExeName "PinVPN.exe"
@@ -34,21 +34,17 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Files]
 
-; Основное приложение
 Source: "..\dist\PinVPN.exe"; \
     DestDir: "{app}"; \
     Flags: ignoreversion
 
-; Привилегированная служба PinVPN
 Source: "..\dist\PinVPNService.exe"; \
     DestDir: "{app}"; \
     Flags: ignoreversion
 
-; Официальный WireGuard MSI
 Source: "{#WireGuardMsi}"; \
     DestDir: "{app}"; \
     Flags: deleteafterinstall
-
 
 [Icons]
 
@@ -59,75 +55,45 @@ Name: "{autodesktop}\PinVPN"; \
     Filename: "{app}\{#MyAppExeName}"; \
     Tasks: desktopicon
 
-
 [Tasks]
 
 Name: "desktopicon"; \
     Description: "Создать ярлык на рабочем столе"; \
     GroupDescription: "Дополнительные ярлыки:"
 
-
 [Run]
-
-; ------------------------------------------------------------
-; Установка WireGuard
-; ------------------------------------------------------------
 
 Filename: "msiexec.exe"; \
     Parameters: "/i ""{app}\{#WireGuardMsi}"" DO_NOT_LAUNCH=1 /qn /norestart"; \
     StatusMsg: "Установка VPN-компонента..."; \
     Flags: waituntilterminated runhidden
 
-
-; ------------------------------------------------------------
-; Установка PinVPN Service
-; ------------------------------------------------------------
-
 Filename: "{app}\{#MyServiceExeName}"; \
     Parameters: "install"; \
     StatusMsg: "Установка службы PinVPN..."; \
     Flags: waituntilterminated runhidden
-
-
-; ------------------------------------------------------------
-; Автозапуск службы
-; ------------------------------------------------------------
 
 Filename: "{sys}\sc.exe"; \
     Parameters: "config PinVPNService start= auto"; \
     StatusMsg: "Настройка службы PinVPN..."; \
     Flags: waituntilterminated runhidden
 
-
-; ------------------------------------------------------------
-; Запуск службы
-; ------------------------------------------------------------
-
 Filename: "{sys}\sc.exe"; \
     Parameters: "start PinVPNService"; \
     StatusMsg: "Запуск службы PinVPN..."; \
     Flags: waituntilterminated runhidden
 
-
-; ------------------------------------------------------------
-; Запуск PinVPN
-; ------------------------------------------------------------
-
 Filename: "{app}\{#MyAppExeName}"; \
     Description: "Запустить PinVPN"; \
     Flags: nowait postinstall skipifsilent
 
-
 [UninstallRun]
 
-; Останавливаем службу
 Filename: "{app}\{#MyServiceExeName}"; \
     Parameters: "stop"; \
     Flags: waituntilterminated runhidden; \
     RunOnceId: "StopPinVPNService"
 
-
-; Удаляем службу
 Filename: "{app}\{#MyServiceExeName}"; \
     Parameters: "remove"; \
     Flags: waituntilterminated runhidden; \
