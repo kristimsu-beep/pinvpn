@@ -1,8 +1,7 @@
 import sys
 import os
-import subprocess
-import tempfile
-import ctypes
+import json
+import socket
 import requests
 
 from PySide6.QtCore import Qt
@@ -26,49 +25,133 @@ SERVER_URL = "https://pinvpn.onrender.com"
 
 
 # ============================================================
-# WIREGUARD
+# LOCAL PINVPN SERVICE
 # ============================================================
 
-WIREGUARD_EXE = r"C:\Program Files\WireGuard\wireguard.exe"
+SERVICE_HOST = "127.0.0.1"
+SERVICE_PORT = 47811
 
-WG_TEMP_CONFIG = os.path.join(
-    tempfile.gettempdir(),
-    "pinvpn.conf"
-)
+SERVICE_TOKEN_FILE = r"C:\ProgramData\PinVPN\service.token"
 
 
 # ============================================================
-# ADMINISTRATOR HELPER
+# LOCAL SERVICE COMMUNICATION
 # ============================================================
 
-def run_as_admin(command):
-    """
-    Запускает команду через UAC Windows.
-    """
+def read_service_token():
 
-    command_line = subprocess.list2cmdline(
-        command
-    )
-
-    result = ctypes.windll.shell32.ShellExecuteW(
-        None,
-        "runas",
-        command[0],
-        command_line[
-            len(command[0]) + 1:
-        ],
-        None,
-        1,
-    )
-
-    if result <= 32:
+    if not os.path.exists(
+        SERVICE_TOKEN_FILE
+    ):
 
         raise Exception(
-            "Windows не смог предоставить "
-            "права администратора."
+            "PinVPN Service не установлена."
         )
 
-    return result
+    with open(
+        SERVICE_TOKEN_FILE,
+        "r",
+        encoding="utf-8"
+    ) as file:
+
+        token = file.read().strip()
+
+    if not token:
+
+        raise Exception(
+            "Токен PinVPN Service пуст."
+        )
+
+    return token
+
+
+def service_request(
+    action,
+    config=None
+):
+
+    token = read_service_token()
+
+    payload = {
+        "action": action,
+        "token": token,
+    }
+
+    if config is not None:
+
+        payload["config"] = config
+
+    message = (
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+    try:
+
+        with socket.create_connection(
+            (
+                SERVICE_HOST,
+                SERVICE_PORT,
+            ),
+            timeout=10,
+        ) as sock:
+
+            sock.sendall(message)
+
+            data = b""
+
+            while True:
+
+                part = sock.recv(65536)
+
+                if not part:
+                    break
+
+                data += part
+
+                if b"\n" in part:
+                    break
+
+    except OSError as error:
+
+        raise Exception(
+            "Не удалось связаться "
+            "с PinVPN Service.\n\n"
+            f"{error}"
+        )
+
+    if not data:
+
+        raise Exception(
+            "PinVPN Service не вернула ответ."
+        )
+
+    try:
+
+        response = json.loads(
+            data.decode("utf-8").strip()
+        )
+
+    except json.JSONDecodeError:
+
+        raise Exception(
+            "PinVPN Service вернула "
+            "некорректный ответ."
+        )
+
+    if response.get("status") != "ok":
+
+        raise Exception(
+            response.get(
+                "error",
+                "Неизвестная ошибка PinVPN Service."
+            )
+        )
+
+    return response
 
 
 # ============================================================
@@ -78,19 +161,21 @@ def run_as_admin(command):
 class PinVPN(QWidget):
 
     def __init__(self):
+
         super().__init__()
 
         self.token = None
         self.devices = []
 
         self.connected = False
-        self.current_config_path = None
 
         self.setWindowTitle("PinVPN")
         self.setFixedSize(420, 520)
 
         self.build_ui()
         self.apply_style()
+
+        self.check_service()
 
     # ========================================================
     # UI
@@ -108,7 +193,10 @@ class PinVPN(QWidget):
             35
         )
 
-        title = QLabel("PinVPN")
+        # Logo
+        title = QLabel(
+            "PinVPN"
+        )
 
         title.setAlignment(
             Qt.AlignCenter
@@ -121,6 +209,7 @@ class PinVPN(QWidget):
             """
         )
 
+        # Subtitle
         subtitle = QLabel(
             "Secure VPN"
         )
@@ -136,12 +225,14 @@ class PinVPN(QWidget):
             """
         )
 
+        # Username
         self.username = QLineEdit()
 
         self.username.setPlaceholderText(
             "Логин"
         )
 
+        # Password
         self.password = QLineEdit()
 
         self.password.setPlaceholderText(
@@ -152,6 +243,7 @@ class PinVPN(QWidget):
             QLineEdit.Password
         )
 
+        # Login
         self.login_button = QPushButton(
             "ВОЙТИ"
         )
@@ -160,16 +252,19 @@ class PinVPN(QWidget):
             self.login
         )
 
+        # Device label
         device_label = QLabel(
             "Устройство:"
         )
 
+        # Device selector
         self.device_box = QComboBox()
 
         self.device_box.setEnabled(
             False
         )
 
+        # Connect
         self.connect_button = QPushButton(
             "ПОДКЛЮЧИТЬ"
         )
@@ -182,18 +277,27 @@ class PinVPN(QWidget):
             self.toggle_vpn
         )
 
+        # Status
         self.status = QLabel(
-            "Статус: Не подключено"
+            "Статус: Проверка..."
         )
 
         self.status.setAlignment(
             Qt.AlignCenter
         )
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        # Layout
+        layout.addWidget(
+            title
+        )
 
-        layout.addSpacing(20)
+        layout.addWidget(
+            subtitle
+        )
+
+        layout.addSpacing(
+            20
+        )
 
         layout.addWidget(
             self.username
@@ -207,7 +311,9 @@ class PinVPN(QWidget):
             self.login_button
         )
 
-        layout.addSpacing(15)
+        layout.addSpacing(
+            15
+        )
 
         layout.addWidget(
             device_label
@@ -247,37 +353,53 @@ class PinVPN(QWidget):
 
             QLineEdit,
             QComboBox {
+
                 background: #1a1c22;
+
                 border: 1px solid #30333b;
+
                 border-radius: 9px;
+
                 padding: 11px;
+
                 color: white;
             }
 
             QLineEdit:focus,
             QComboBox:focus {
+
                 border: 1px solid #e91e63;
             }
 
             QPushButton {
+
                 background: #e91e63;
+
                 border: none;
+
                 border-radius: 9px;
+
                 padding: 12px;
+
                 color: white;
+
                 font-weight: bold;
             }
 
             QPushButton:hover {
+
                 background: #f22970;
             }
 
             QPushButton:pressed {
+
                 background: #c91652;
             }
 
             QPushButton:disabled {
+
                 background: #35373e;
+
                 color: #888;
             }
 
@@ -288,14 +410,64 @@ class PinVPN(QWidget):
         )
 
     # ========================================================
+    # SERVICE CHECK
+    # ========================================================
+
+    def check_service(self):
+
+        try:
+
+            response = service_request(
+                "status"
+            )
+
+            self.connected = bool(
+                response.get(
+                    "connected",
+                    False
+                )
+            )
+
+            if self.connected:
+
+                self.status.setText(
+                    "Статус: 🟢 Подключено"
+                )
+
+                self.connect_button.setText(
+                    "ОТКЛЮЧИТЬ"
+                )
+
+            else:
+
+                self.status.setText(
+                    "Статус: Не подключено"
+                )
+
+        except Exception:
+
+            self.connected = False
+
+            self.status.setText(
+                "Статус: Служба PinVPN недоступна"
+            )
+
+    # ========================================================
     # LOGIN
     # ========================================================
 
     def login(self):
 
-        username = self.username.text().strip()
+        username = (
+            self.username
+            .text()
+            .strip()
+        )
 
-        password = self.password.text()
+        password = (
+            self.password
+            .text()
+        )
 
         if not username:
 
@@ -378,6 +550,10 @@ class PinVPN(QWidget):
                     "Сервер не вернул токен."
                 )
 
+                self.status.setText(
+                    "Статус: Ошибка"
+                )
+
                 return
 
             self.load_devices()
@@ -457,9 +633,15 @@ class PinVPN(QWidget):
             for device in self.devices:
 
                 name = (
+
                     device.get("name")
-                    or device.get("device_name")
+
+                    or device.get(
+                        "device_name"
+                    )
+
                     or device.get("id")
+
                     or "Устройство"
                 )
 
@@ -482,9 +664,13 @@ class PinVPN(QWidget):
 
             if has_devices:
 
-                self.status.setText(
-                    "Статус: Готово к подключению"
-                )
+                self.check_service()
+
+                if not self.connected:
+
+                    self.status.setText(
+                        "Статус: Готово к подключению"
+                    )
 
             else:
 
@@ -520,20 +706,6 @@ class PinVPN(QWidget):
             )
 
     # ========================================================
-    # TOGGLE VPN
-    # ========================================================
-
-    def toggle_vpn(self):
-
-        if self.connected:
-
-            self.disconnect_vpn()
-
-        else:
-
-            self.connect_vpn()
-
-    # ========================================================
     # GET WIREGUARD CONFIG
     # ========================================================
 
@@ -543,7 +715,9 @@ class PinVPN(QWidget):
     ):
 
         device_id = (
+
             device.get("id")
+
             or device.get("_id")
         )
 
@@ -573,7 +747,9 @@ class PinVPN(QWidget):
 
                 "Сервер не смог вернуть "
                 "WireGuard-конфигурацию.\n\n"
+
                 f"HTTP {response.status_code}\n"
+
                 f"{response.text}"
             )
 
@@ -593,12 +769,32 @@ class PinVPN(QWidget):
         return config
 
     # ========================================================
+    # TOGGLE VPN
+    # ========================================================
+
+    def toggle_vpn(self):
+
+        if self.connected:
+
+            self.disconnect_vpn()
+
+        else:
+
+            self.connect_vpn()
+
+    # ========================================================
     # CONNECT VPN
     # ========================================================
 
     def connect_vpn(self):
 
         if not self.token:
+
+            QMessageBox.warning(
+                self,
+                "PinVPN",
+                "Сначала войдите в аккаунт."
+            )
 
             return
 
@@ -626,45 +822,34 @@ class PinVPN(QWidget):
 
         try:
 
-            if not os.path.exists(
-                WIREGUARD_EXE
-            ):
-
-                raise Exception(
-                    "WireGuard не найден.\n\n"
-                    f"{WIREGUARD_EXE}"
-                )
-
             # Получаем конфигурацию
-            config = self.get_wireguard_config(
-                device
-            )
-
-            # Сохраняем её
-            with open(
-                WG_TEMP_CONFIG,
-                "w",
-                encoding="utf-8"
-            ) as file:
-
-                file.write(config)
-
-            self.current_config_path = (
-                WG_TEMP_CONFIG
+            # непосредственно с PinVPN-сервера.
+            config = (
+                self.get_wireguard_config(
+                    device
+                )
             )
 
             self.status.setText(
-                "Статус: Ожидание разрешения Windows..."
+                "Статус: Подключение..."
             )
 
-            # Запрашиваем права администратора
-            run_as_admin(
-                [
-                    WIREGUARD_EXE,
-                    "/installtunnelservice",
-                    WG_TEMP_CONFIG,
-                ]
+            # Передаём конфигурацию
+            # привилегированной службе.
+            response = service_request(
+                "connect",
+                config=config
             )
+
+            if not response.get(
+                "connected",
+                False
+            ):
+
+                raise Exception(
+                    "PinVPN Service не "
+                    "подтвердила подключение."
+                )
 
             self.connected = True
 
@@ -678,13 +863,18 @@ class PinVPN(QWidget):
 
         except Exception as error:
 
+            self.connected = False
+
             self.status.setText(
                 "Статус: Ошибка подключения"
             )
 
             QMessageBox.critical(
+
                 self,
+
                 "PinVPN",
+
                 str(error)
             )
 
@@ -710,12 +900,8 @@ class PinVPN(QWidget):
 
         try:
 
-            run_as_admin(
-                [
-                    WIREGUARD_EXE,
-                    "/uninstalltunnelservice",
-                    "pinvpn",
-                ]
+            service_request(
+                "disconnect"
             )
 
             self.connected = False
@@ -731,8 +917,11 @@ class PinVPN(QWidget):
         except Exception as error:
 
             QMessageBox.warning(
+
                 self,
+
                 "PinVPN",
+
                 (
                     "Не удалось отключить VPN:\n\n"
                     f"{error}"
@@ -746,14 +935,17 @@ class PinVPN(QWidget):
             )
 
     # ========================================================
-    # CLOSE WINDOW
+    # CLOSE
     # ========================================================
 
-    def closeEvent(self, event):
+    def closeEvent(
+        self,
+        event
+    ):
 
-        # Не отключаем VPN автоматически при
-        # закрытии окна. VPN может продолжать
-        # работать в фоновом режиме.
+        # VPN специально НЕ отключаем.
+        # Системная служба продолжает
+        # держать туннель активным.
 
         event.accept()
 
