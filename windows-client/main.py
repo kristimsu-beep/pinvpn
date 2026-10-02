@@ -5,7 +5,13 @@ import socket
 import keyring
 import requests
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import (
+    Qt,
+    QTimer,
+    QPropertyAnimation,
+    QEasingCurve,
+)
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -18,6 +24,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStackedWidget,
     QFrame,
+    QSizePolicy,
 )
 
 
@@ -37,14 +44,36 @@ KEYRING_USERNAME = "client_token"
 
 
 # ============================================================
+# COLORS
+# ============================================================
+
+BG = "#08090d"
+SIDEBAR = "#0d0f14"
+CARD = "#11141b"
+CARD_2 = "#151820"
+BORDER = "#242832"
+
+PINK = "#ff2f7d"
+PINK_HOVER = "#ff438b"
+PINK_DARK = "#d91d62"
+
+GREEN = "#65e6a1"
+RED = "#ff5c7c"
+YELLOW = "#ffc857"
+
+WHITE = "#ffffff"
+TEXT = "#dce0e8"
+MUTED = "#858c9c"
+DIM = "#5e6574"
+
+
+# ============================================================
 # PINVPN SERVICE
 # ============================================================
 
 def read_service_token():
 
-    if not os.path.exists(
-        SERVICE_TOKEN_FILE
-    ):
+    if not os.path.exists(SERVICE_TOKEN_FILE):
 
         raise Exception(
             "PinVPN Service не установлена."
@@ -80,6 +109,7 @@ def service_request(
     }
 
     if config is not None:
+
         payload["config"] = config
 
     message = (
@@ -209,10 +239,10 @@ def clear_saved_login():
 
 
 # ============================================================
-# UI HELPERS
+# HELPERS
 # ============================================================
 
-def make_card():
+def card():
 
     frame = QFrame()
 
@@ -221,6 +251,30 @@ def make_card():
     )
 
     return frame
+
+
+def make_separator():
+
+    line = QFrame()
+
+    line.setFrameShape(
+        QFrame.HLine
+    )
+
+    line.setObjectName(
+        "separator"
+    )
+
+    return line
+
+
+def status_dot():
+
+    label = QLabel("●")
+
+    label.setFixedWidth(18)
+
+    return label
 
 
 # ============================================================
@@ -235,16 +289,23 @@ class PinVPN(QWidget):
 
         self.token = None
         self.devices = []
-
         self.connected = False
+        self.current_username = ""
+
+        self.pulse_animation = None
 
         self.setWindowTitle(
             "PinVPN"
         )
 
         self.setMinimumSize(
-            900,
-            620
+            980,
+            680
+        )
+
+        self.resize(
+            1250,
+            760
         )
 
         self.build_ui()
@@ -259,7 +320,7 @@ class PinVPN(QWidget):
         )
 
         self.service_timer.start(
-            2000
+            2500
         )
 
         self.try_auto_login()
@@ -273,14 +334,14 @@ class PinVPN(QWidget):
         root = QVBoxLayout()
 
         root.setContentsMargins(
-            40,
-            35,
-            40,
-            30
+            0,
+            0,
+            0,
+            0
         )
 
         root.setSpacing(
-            25
+            0
         )
 
         self.pages = QStackedWidget()
@@ -302,12 +363,16 @@ class PinVPN(QWidget):
         )
 
     # ========================================================
-    # LOGIN PAGE
+    # LOGIN
     # ========================================================
 
     def build_login_page(self):
 
         page = QWidget()
+
+        page.setObjectName(
+            "loginPage"
+        )
 
         outer = QVBoxLayout()
 
@@ -315,53 +380,76 @@ class PinVPN(QWidget):
             Qt.AlignCenter
         )
 
-        card = make_card()
+        outer.setContentsMargins(
+            30,
+            30,
+            30,
+            30
+        )
 
-        card.setMaximumWidth(
+        login_card = card()
+
+        login_card.setMaximumWidth(
             480
         )
 
         layout = QVBoxLayout()
 
         layout.setContentsMargins(
-            45,
-            45,
-            45,
-            45
+            52,
+            48,
+            52,
+            48
         )
 
         layout.setSpacing(
-            18
+            16
         )
 
         logo = QLabel(
             "PinVPN"
         )
 
+        logo.setObjectName(
+            "loginLogo"
+        )
+
         logo.setAlignment(
             Qt.AlignCenter
         )
 
-        logo.setObjectName(
-            "logo"
+        subtitle = QLabel(
+            "SECURE INTERNET"
         )
 
-        subtitle = QLabel(
-            "Secure Internet"
+        subtitle.setObjectName(
+            "loginSubtitle"
         )
 
         subtitle.setAlignment(
             Qt.AlignCenter
         )
 
-        subtitle.setObjectName(
-            "subtitle"
+        welcome = QLabel(
+            "Добро пожаловать"
+        )
+
+        welcome.setObjectName(
+            "welcomeText"
+        )
+
+        welcome.setAlignment(
+            Qt.AlignCenter
         )
 
         self.username = QLineEdit()
 
         self.username.setPlaceholderText(
-            "Логин"
+            "Имя пользователя"
+        )
+
+        self.username.setMinimumHeight(
+            52
         )
 
         self.password = QLineEdit()
@@ -374,12 +462,20 @@ class PinVPN(QWidget):
             QLineEdit.Password
         )
 
+        self.password.setMinimumHeight(
+            52
+        )
+
         self.login_button = QPushButton(
             "ВОЙТИ"
         )
 
         self.login_button.setMinimumHeight(
-            52
+            54
+        )
+
+        self.login_button.setCursor(
+            Qt.PointingHandCursor
         )
 
         self.login_button.clicked.connect(
@@ -388,6 +484,10 @@ class PinVPN(QWidget):
 
         self.login_status = QLabel(
             ""
+        )
+
+        self.login_status.setObjectName(
+            "loginStatus"
         )
 
         self.login_status.setAlignment(
@@ -407,7 +507,15 @@ class PinVPN(QWidget):
         )
 
         layout.addSpacing(
-            25
+            24
+        )
+
+        layout.addWidget(
+            welcome
+        )
+
+        layout.addSpacing(
+            10
         )
 
         layout.addWidget(
@@ -419,7 +527,7 @@ class PinVPN(QWidget):
         )
 
         layout.addSpacing(
-            5
+            7
         )
 
         layout.addWidget(
@@ -427,19 +535,19 @@ class PinVPN(QWidget):
         )
 
         layout.addSpacing(
-            10
+            8
         )
 
         layout.addWidget(
             self.login_status
         )
 
-        card.setLayout(
+        login_card.setLayout(
             layout
         )
 
         outer.addWidget(
-            card
+            login_card
         )
 
         page.setLayout(
@@ -449,95 +557,225 @@ class PinVPN(QWidget):
         return page
 
     # ========================================================
-    # MAIN PAGE
+    # MAIN
     # ========================================================
 
     def build_main_page(self):
 
         page = QWidget()
 
-        outer = QVBoxLayout()
-
-        outer.setContentsMargins(
-            30,
-            10,
-            30,
-            10
+        page.setObjectName(
+            "mainPage"
         )
 
-        outer.setSpacing(
-            20
+        root = QHBoxLayout()
+
+        root.setContentsMargins(
+            0,
+            0,
+            0,
+            0
         )
 
-        # Header
-        header = QHBoxLayout()
+        root.setSpacing(
+            0
+        )
+
+        # ====================================================
+        # SIDEBAR
+        # ====================================================
+
+        sidebar = QWidget()
+
+        sidebar.setObjectName(
+            "sidebar"
+        )
+
+        sidebar.setFixedWidth(
+            245
+        )
+
+        side_layout = QVBoxLayout()
+
+        side_layout.setContentsMargins(
+            24,
+            28,
+            24,
+            24
+        )
+
+        side_layout.setSpacing(
+            12
+        )
 
         logo = QLabel(
             "PinVPN"
         )
 
         logo.setObjectName(
-            "headerLogo"
+            "sideLogo"
         )
 
-        account = QLabel(
-            "Аккаунт"
+        side_subtitle = QLabel(
+            "SECURE INTERNET"
         )
 
-        account.setObjectName(
-            "accountLabel"
+        side_subtitle.setObjectName(
+            "sideSubtitle"
         )
 
-        self.logout_button = QPushButton(
-            "ВЫЙТИ"
-        )
-
-        self.logout_button.setObjectName(
-            "smallButton"
-        )
-
-        self.logout_button.clicked.connect(
-            self.logout
-        )
-
-        header.addWidget(
+        side_layout.addWidget(
             logo
+        )
+
+        side_layout.addWidget(
+            side_subtitle
+        )
+
+        side_layout.addSpacing(
+            30
+        )
+
+        dashboard = QLabel(
+            "◉   ПОДКЛЮЧЕНИЕ"
+        )
+
+        dashboard.setObjectName(
+            "sideActive"
+        )
+
+        side_layout.addWidget(
+            dashboard
+        )
+
+        side_layout.addStretch()
+
+        version = QLabel(
+            "PinVPN\nDesktop"
+        )
+
+        version.setObjectName(
+            "sideVersion"
+        )
+
+        side_layout.addWidget(
+            version
+        )
+
+        sidebar.setLayout(
+            side_layout
+        )
+
+        # ====================================================
+        # CONTENT
+        # ====================================================
+
+        content = QWidget()
+
+        content_layout = QVBoxLayout()
+
+        content_layout.setContentsMargins(
+            30,
+            25,
+            30,
+            25
+        )
+
+        content_layout.setSpacing(
+            22
+        )
+
+        # Header
+        header = QHBoxLayout()
+
+        header.setSpacing(
+            12
+        )
+
+        title_block = QVBoxLayout()
+
+        title_block.setSpacing(
+            2
+        )
+
+        title = QLabel(
+            "Подключение"
+        )
+
+        title.setObjectName(
+            "pageTitle"
+        )
+
+        subtitle = QLabel(
+            "Управление защищённым соединением"
+        )
+
+        subtitle.setObjectName(
+            "pageSubtitle"
+        )
+
+        title_block.addWidget(
+            title
+        )
+
+        title_block.addWidget(
+            subtitle
+        )
+
+        header.addLayout(
+            title_block
         )
 
         header.addStretch()
 
-        header.addWidget(
-            account
+        self.account_button = QPushButton(
+            "●  Аккаунт"
+        )
+
+        self.account_button.setObjectName(
+            "accountButton"
+        )
+
+        self.account_button.setCursor(
+            Qt.PointingHandCursor
+        )
+
+        self.account_button.clicked.connect(
+            self.logout
         )
 
         header.addWidget(
-            self.logout_button
+            self.account_button
         )
 
-        outer.addLayout(
+        content_layout.addLayout(
             header
         )
 
-        # Content
-        content = QHBoxLayout()
+        # ====================================================
+        # TOP CARDS
+        # ====================================================
 
-        content.setSpacing(
-            25
+        top = QHBoxLayout()
+
+        top.setSpacing(
+            18
         )
 
-        # ----------------------------------------------------
-        # Left card
-        # ----------------------------------------------------
+        # Device card
+        device_card = card()
 
-        left_card = make_card()
+        device_card.setMinimumHeight(
+            120
+        )
 
-        left_layout = QVBoxLayout()
+        device_layout = QVBoxLayout()
 
-        left_layout.setContentsMargins(
-            30,
-            30,
-            30,
-            30
+        device_layout.setContentsMargins(
+            22,
+            18,
+            22,
+            18
         )
 
         device_title = QLabel(
@@ -545,46 +783,102 @@ class PinVPN(QWidget):
         )
 
         device_title.setObjectName(
-            "sectionTitle"
+            "smallTitle"
         )
 
         self.device_box = QComboBox()
 
         self.device_box.setMinimumHeight(
-            48
+            46
         )
 
-        left_layout.addWidget(
+        device_layout.addWidget(
             device_title
         )
 
-        left_layout.addSpacing(
-            10
+        device_layout.addSpacing(
+            7
         )
 
-        left_layout.addWidget(
+        device_layout.addWidget(
             self.device_box
         )
 
-        left_layout.addStretch()
-
-        left_card.setLayout(
-            left_layout
+        device_card.setLayout(
+            device_layout
         )
 
-        # ----------------------------------------------------
-        # Center card
-        # ----------------------------------------------------
+        top.addWidget(
+            device_card,
+            2
+        )
 
-        center_card = make_card()
+        # Service card
+        service_card = card()
+
+        service_layout = QVBoxLayout()
+
+        service_layout.setContentsMargins(
+            22,
+            18,
+            22,
+            18
+        )
+
+        service_title = QLabel(
+            "СЕРВИС"
+        )
+
+        service_title.setObjectName(
+            "smallTitle"
+        )
+
+        self.service_label = QLabel(
+            "●  Проверка..."
+        )
+
+        self.service_label.setObjectName(
+            "serviceValue"
+        )
+
+        service_layout.addWidget(
+            service_title
+        )
+
+        service_layout.addSpacing(
+            10
+        )
+
+        service_layout.addWidget(
+            self.service_label
+        )
+
+        service_card.setLayout(
+            service_layout
+        )
+
+        top.addWidget(
+            service_card,
+            1
+        )
+
+        content_layout.addLayout(
+            top
+        )
+
+        # ====================================================
+        # VPN CENTER
+        # ====================================================
+
+        center = card()
 
         center_layout = QVBoxLayout()
 
         center_layout.setContentsMargins(
+            35,
             30,
-            30,
-            30,
-            30
+            35,
+            28
         )
 
         center_layout.setAlignment(
@@ -596,9 +890,18 @@ class PinVPN(QWidget):
         )
 
         self.status_label.setObjectName(
-            "vpnStatus"
+            "mainStatus"
         )
 
+        self.status_hint = QLabel(
+            "Ваше соединение не защищено"
+        )
+
+        self.status_hint.setObjectName(
+            "statusHint"
+        )
+
+        # VPN button
         self.connect_button = QPushButton(
             "ПОДКЛЮЧИТЬ"
         )
@@ -608,8 +911,12 @@ class PinVPN(QWidget):
         )
 
         self.connect_button.setFixedSize(
-            250,
-            250
+            230,
+            230
+        )
+
+        self.connect_button.setCursor(
+            Qt.PointingHandCursor
         )
 
         self.connect_button.clicked.connect(
@@ -617,22 +924,33 @@ class PinVPN(QWidget):
         )
 
         self.info_label = QLabel(
-            "PinVPN"
+            "Выберите устройство и подключитесь к PinVPN"
         )
 
         self.info_label.setObjectName(
-            "infoLabel"
+            "centerInfo"
         )
 
-        center_layout.addStretch()
+        self.info_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.info_label.setWordWrap(
+            True
+        )
 
         center_layout.addWidget(
             self.status_label,
             alignment=Qt.AlignCenter
         )
 
+        center_layout.addWidget(
+            self.status_hint,
+            alignment=Qt.AlignCenter
+        )
+
         center_layout.addSpacing(
-            25
+            22
         )
 
         center_layout.addWidget(
@@ -641,7 +959,7 @@ class PinVPN(QWidget):
         )
 
         center_layout.addSpacing(
-            20
+            18
         )
 
         center_layout.addWidget(
@@ -649,146 +967,188 @@ class PinVPN(QWidget):
             alignment=Qt.AlignCenter
         )
 
-        center_layout.addStretch()
-
-        center_card.setLayout(
+        center.setLayout(
             center_layout
         )
 
-        # ----------------------------------------------------
-        # Right card
-        # ----------------------------------------------------
-
-        right_card = make_card()
-
-        right_layout = QVBoxLayout()
-
-        right_layout.setContentsMargins(
-            30,
-            30,
-            30,
-            30
-        )
-
-        vpn_title = QLabel(
-            "СОЕДИНЕНИЕ"
-        )
-
-        vpn_title.setObjectName(
-            "sectionTitle"
-        )
-
-        self.service_label = QLabel(
-            "Сервис: проверка..."
-        )
-
-        self.service_label.setObjectName(
-            "infoRow"
-        )
-
-        self.protocol_label = QLabel(
-            "Протокол: WireGuard"
-        )
-
-        self.protocol_label.setObjectName(
-            "infoRow"
-        )
-
-        self.network_label = QLabel(
-            "Сеть: IPv6"
-        )
-
-        self.network_label.setObjectName(
-            "infoRow"
-        )
-
-        self.ipv4_label = QLabel(
-            "IPv4: текущий"
-        )
-
-        self.ipv4_label.setObjectName(
-            "infoRow"
-        )
-
-        self.ipv6_label = QLabel(
-            "IPv6: PinVPN"
-        )
-
-        self.ipv6_label.setObjectName(
-            "infoRow"
-        )
-
-        right_layout.addWidget(
-            vpn_title
-        )
-
-        right_layout.addSpacing(
-            20
-        )
-
-        right_layout.addWidget(
-            self.service_label
-        )
-
-        right_layout.addSpacing(
-            12
-        )
-
-        right_layout.addWidget(
-            self.protocol_label
-        )
-
-        right_layout.addSpacing(
-            12
-        )
-
-        right_layout.addWidget(
-            self.network_label
-        )
-
-        right_layout.addSpacing(
-            12
-        )
-
-        right_layout.addWidget(
-            self.ipv4_label
-        )
-
-        right_layout.addSpacing(
-            12
-        )
-
-        right_layout.addWidget(
-            self.ipv6_label
-        )
-
-        right_layout.addStretch()
-
-        right_card.setLayout(
-            right_layout
-        )
-
-        content.addWidget(
-            left_card,
+        content_layout.addWidget(
+            center,
             1
         )
 
-        content.addWidget(
-            center_card,
-            2
+        # ====================================================
+        # BOTTOM INFO
+        # ====================================================
+
+        bottom = QHBoxLayout()
+
+        bottom.setSpacing(
+            18
         )
 
-        content.addWidget(
-            right_card,
+        # Protocol
+        protocol = card()
+
+        protocol_layout = QVBoxLayout()
+
+        protocol_layout.setContentsMargins(
+            22,
+            16,
+            22,
+            16
+        )
+
+        protocol_title = QLabel(
+            "ПРОТОКОЛ"
+        )
+
+        protocol_title.setObjectName(
+            "smallTitle"
+        )
+
+        self.protocol_value = QLabel(
+            "WireGuard"
+        )
+
+        self.protocol_value.setObjectName(
+            "infoValue"
+        )
+
+        protocol_layout.addWidget(
+            protocol_title
+        )
+
+        protocol_layout.addSpacing(
+            5
+        )
+
+        protocol_layout.addWidget(
+            self.protocol_value
+        )
+
+        protocol.setLayout(
+            protocol_layout
+        )
+
+        bottom.addWidget(
+            protocol
+        )
+
+        # Network
+        network = card()
+
+        network_layout = QVBoxLayout()
+
+        network_layout.setContentsMargins(
+            22,
+            16,
+            22,
+            16
+        )
+
+        network_title = QLabel(
+            "СЕТЬ"
+        )
+
+        network_title.setObjectName(
+            "smallTitle"
+        )
+
+        self.network_value = QLabel(
+            "IPv6"
+        )
+
+        self.network_value.setObjectName(
+            "infoValue"
+        )
+
+        network_layout.addWidget(
+            network_title
+        )
+
+        network_layout.addSpacing(
+            5
+        )
+
+        network_layout.addWidget(
+            self.network_value
+        )
+
+        network.setLayout(
+            network_layout
+        )
+
+        bottom.addWidget(
+            network
+        )
+
+        # IPv6
+        ipv6 = card()
+
+        ipv6_layout = QVBoxLayout()
+
+        ipv6_layout.setContentsMargins(
+            22,
+            16,
+            22,
+            16
+        )
+
+        ipv6_title = QLabel(
+            "PINVPN IPv6"
+        )
+
+        ipv6_title.setObjectName(
+            "smallTitle"
+        )
+
+        self.ipv6_value = QLabel(
+            "Активен"
+        )
+
+        self.ipv6_value.setObjectName(
+            "infoValue"
+        )
+
+        ipv6_layout.addWidget(
+            ipv6_title
+        )
+
+        ipv6_layout.addSpacing(
+            5
+        )
+
+        ipv6_layout.addWidget(
+            self.ipv6_value
+        )
+
+        ipv6.setLayout(
+            ipv6_layout
+        )
+
+        bottom.addWidget(
+            ipv6
+        )
+
+        content_layout.addLayout(
+            bottom
+        )
+
+        content.setLayout(
+            content_layout
+        )
+
+        root.addWidget(
+            sidebar
+        )
+
+        root.addWidget(
+            content,
             1
-        )
-
-        outer.addLayout(
-            content
         )
 
         page.setLayout(
-            outer
+            root
         )
 
         self.main_page = page
@@ -802,121 +1162,249 @@ class PinVPN(QWidget):
     def apply_style(self):
 
         self.setStyleSheet(
-            """
-            QWidget {
-                background: #0a0b0f;
-                color: #ffffff;
-                font-size: 15px;
-            }
+            f"""
+            * {{
+                font-family: "Segoe UI";
+            }}
 
-            QFrame#card {
-                background: #12141a;
-                border: 1px solid #242731;
-                border-radius: 22px;
-            }
-
-            QLabel#logo {
-                font-size: 52px;
-                font-weight: 800;
-                color: #ff2f7d;
-            }
-
-            QLabel#subtitle {
-                color: #8e94a3;
-                font-size: 16px;
-            }
-
-            QLabel#headerLogo {
-                font-size: 34px;
-                font-weight: 800;
-                color: #ff2f7d;
-            }
-
-            QLabel#accountLabel {
-                color: #9ca2b1;
+            QWidget {{
+                background: {BG};
+                color: {WHITE};
                 font-size: 14px;
-            }
+            }}
 
-            QLabel#sectionTitle {
-                color: #8e94a3;
-                font-size: 12px;
+            QWidget#loginPage {{
+                background: {BG};
+            }}
+
+            QWidget#mainPage {{
+                background: {BG};
+            }}
+
+            QFrame#card {{
+                background: {CARD};
+                border: 1px solid {BORDER};
+                border-radius: 18px;
+            }}
+
+            QFrame#separator {{
+                background: {BORDER};
+                border: none;
+                max-height: 1px;
+            }}
+
+            /* LOGIN */
+
+            QLabel#loginLogo {{
+                font-size: 54px;
+                font-weight: 800;
+                color: {PINK};
+            }}
+
+            QLabel#loginSubtitle {{
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 3px;
+                color: {MUTED};
+            }}
+
+            QLabel#welcomeText {{
+                font-size: 19px;
+                font-weight: 700;
+                color: {TEXT};
+            }}
+
+            QLabel#loginStatus {{
+                color: {MUTED};
+                font-size: 13px;
+            }}
+
+            /* SIDEBAR */
+
+            QWidget#sidebar {{
+                background: {SIDEBAR};
+                border-right: 1px solid {BORDER};
+            }}
+
+            QLabel#sideLogo {{
+                font-size: 31px;
+                font-weight: 800;
+                color: {PINK};
+            }}
+
+            QLabel#sideSubtitle {{
+                color: {DIM};
+                font-size: 8px;
                 font-weight: 700;
                 letter-spacing: 2px;
-            }
+            }}
 
-            QLabel#vpnStatus {
-                font-size: 21px;
+            QLabel#sideActive {{
+                background: #19131a;
+                border: 1px solid #35202d;
+                border-radius: 10px;
+                padding: 13px;
+                color: {PINK};
+                font-size: 12px;
                 font-weight: 700;
-                color: #aeb4c3;
-            }
+            }}
 
-            QLabel#infoLabel {
-                color: #777d8c;
-                font-size: 13px;
-            }
+            QLabel#sideVersion {{
+                color: {DIM};
+                font-size: 11px;
+                line-height: 150%;
+            }}
 
-            QLabel#infoRow {
-                color: #c2c7d2;
+            /* HEADER */
+
+            QLabel#pageTitle {{
+                font-size: 28px;
+                font-weight: 750;
+                color: {WHITE};
+            }}
+
+            QLabel#pageSubtitle {{
+                font-size: 12px;
+                color: {MUTED};
+            }}
+
+            QPushButton#accountButton {{
+                background: {CARD};
+                border: 1px solid {BORDER};
+                border-radius: 11px;
+                padding: 10px 17px;
+                color: {TEXT};
+                font-weight: 600;
+            }}
+
+            QPushButton#accountButton:hover {{
+                background: {CARD_2};
+                border-color: #353a46;
+            }}
+
+            /* TITLES */
+
+            QLabel#smallTitle {{
+                color: {DIM};
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 1.8px;
+            }}
+
+            QLabel#serviceValue {{
+                color: {GREEN};
                 font-size: 14px;
-            }
+                font-weight: 650;
+            }}
 
-            QLineEdit,
-            QComboBox {
-                background: #1a1d25;
-                border: 1px solid #2d313c;
-                border-radius: 12px;
-                padding: 13px;
-                color: white;
-            }
+            /* INPUTS */
 
-            QLineEdit:focus,
-            QComboBox:focus {
-                border: 1px solid #ff2f7d;
-            }
+            QLineEdit {{
+                background: #0d1016;
+                border: 1px solid #292e39;
+                border-radius: 11px;
+                padding: 0 15px;
+                color: {WHITE};
+                selection-background-color: {PINK};
+            }}
 
-            QPushButton {
-                background: #ff2f7d;
+            QLineEdit:hover {{
+                border-color: #3a404c;
+            }}
+
+            QLineEdit:focus {{
+                border: 1px solid {PINK};
+            }}
+
+            QComboBox {{
+                background: #0d1016;
+                border: 1px solid #292e39;
+                border-radius: 10px;
+                padding: 0 13px;
+                color: {TEXT};
+            }}
+
+            QComboBox:hover {{
+                border-color: #3a404c;
+            }}
+
+            QComboBox:focus {{
+                border-color: {PINK};
+            }}
+
+            QComboBox::drop-down {{
                 border: none;
-                border-radius: 12px;
-                padding: 13px;
+                width: 34px;
+            }}
+
+            QComboBox QAbstractItemView {{
+                background: #151820;
+                border: 1px solid #303540;
+                color: {WHITE};
+                selection-background-color: {PINK};
+                selection-color: white;
+                padding: 5px;
+            }}
+
+            /* BUTTON */
+
+            QPushButton {{
+                background: {PINK};
+                border: none;
+                border-radius: 11px;
                 color: white;
                 font-weight: 800;
-            }
+            }}
 
-            QPushButton:hover {
-                background: #ff438b;
-            }
+            QPushButton:hover {{
+                background: {PINK_HOVER};
+            }}
 
-            QPushButton:pressed {
-                background: #db1f66;
-            }
+            QPushButton:pressed {{
+                background: {PINK_DARK};
+            }}
 
-            QPushButton:disabled {
-                background: #30333c;
-                color: #777;
-            }
+            QPushButton:disabled {{
+                background: #2a2e37;
+                color: #666c78;
+            }}
 
-            QPushButton#smallButton {
-                background: #1b1e26;
-                border: 1px solid #303440;
-                padding: 8px 15px;
-            }
+            QPushButton#vpnButton {{
+                background: #12151c;
+                border: 5px solid {PINK};
+                border-radius: 115px;
+                color: white;
+                font-size: 20px;
+                font-weight: 800;
+            }}
 
-            QPushButton#smallButton:hover {
-                background: #252935;
-            }
+            QPushButton#vpnButton:hover {{
+                background: #1a1e27;
+            }}
 
-            QPushButton#vpnButton {
-                background: #1b1e26;
-                border: 5px solid #ff2f7d;
-                border-radius: 125px;
+            /* CONNECTED */
+
+            QLabel#mainStatus {{
+                color: #aeb4c3;
                 font-size: 22px;
                 font-weight: 800;
-            }
+            }}
 
-            QPushButton#vpnButton:hover {
-                background: #232630;
-            }
+            QLabel#statusHint {{
+                color: {MUTED};
+                font-size: 12px;
+            }}
+
+            QLabel#centerInfo {{
+                color: {DIM};
+                font-size: 12px;
+            }}
+
+            QLabel#infoValue {{
+                color: {TEXT};
+                font-size: 14px;
+                font-weight: 650;
+            }}
             """
         )
 
@@ -942,15 +1430,13 @@ class PinVPN(QWidget):
                 0
             )
 
-            self.status_label = getattr(
-                self,
-                "status_label",
-                None
-            )
-
             return
 
         self.token = saved_token
+
+        self.current_username = (
+            saved_username or ""
+        )
 
         self.login_status.setText(
             "Восстановление сессии..."
@@ -1040,6 +1526,8 @@ class PinVPN(QWidget):
                 )
 
             self.token = token
+
+            self.current_username = username
 
             save_login(
                 token,
@@ -1133,15 +1621,9 @@ class PinVPN(QWidget):
             for device in self.devices:
 
                 name = (
-
                     device.get("name")
-
-                    or device.get(
-                        "device_name"
-                    )
-
+                    or device.get("device_name")
                     or device.get("id")
-
                     or "Устройство"
                 )
 
@@ -1174,6 +1656,10 @@ class PinVPN(QWidget):
                 True
             )
 
+            self.account_button.setText(
+                f"●  {self.current_username or 'Аккаунт'}"
+            )
+
             self.refresh_service_status()
 
         except Exception as error:
@@ -1202,7 +1688,7 @@ class PinVPN(QWidget):
             )
 
     # ========================================================
-    # GET WIREGUARD CONFIG
+    # GET WIREGUARD
     # ========================================================
 
     def get_wireguard_config(
@@ -1271,11 +1757,11 @@ class PinVPN(QWidget):
             )
 
             self.service_label.setText(
-                "Сервис: ● работает"
+                "●  Работает"
             )
 
             self.service_label.setStyleSheet(
-                "color: #65e6a1;"
+                f"color: {GREEN};"
             )
 
             service_connected = bool(
@@ -1299,14 +1785,21 @@ class PinVPN(QWidget):
             ):
 
                 self.service_label.setText(
-                    "Сервис: ● недоступен"
+                    "●  Недоступен"
                 )
 
                 self.service_label.setStyleSheet(
-                    "color: #ff5c7c;"
+                    f"color: {RED};"
                 )
 
             self.connected = False
+
+            if hasattr(
+                self,
+                "connect_button"
+            ):
+
+                self.update_vpn_ui()
 
     # ========================================================
     # VPN UI
@@ -1321,9 +1814,15 @@ class PinVPN(QWidget):
             )
 
             self.status_label.setStyleSheet(
-                "color: #65e6a1;"
-                "font-size: 21px;"
-                "font-weight: 700;"
+                f"""
+                color: {GREEN};
+                font-size: 22px;
+                font-weight: 800;
+                """
+            )
+
+            self.status_hint.setText(
+                "Ваше соединение защищено"
             )
 
             self.connect_button.setText(
@@ -1331,21 +1830,31 @@ class PinVPN(QWidget):
             )
 
             self.connect_button.setStyleSheet(
-                """
-                QPushButton#vpnButton {
-                    background: #151f1c;
-                    border: 5px solid #65e6a1;
-                    border-radius: 125px;
-                    color: #65e6a1;
-                    font-size: 22px;
+                f"""
+                QPushButton#vpnButton {{
+                    background: #111a17;
+                    border: 5px solid {GREEN};
+                    border-radius: 115px;
+                    color: {GREEN};
+                    font-size: 20px;
                     font-weight: 800;
-                }
+                }}
 
-                QPushButton#vpnButton:hover {
-                    background: #1e2d28;
-                }
+                QPushButton#vpnButton:hover {{
+                    background: #17251f;
+                }}
                 """
             )
+
+            self.info_label.setText(
+                "Защищённое соединение активно"
+            )
+
+            self.ipv6_value.setText(
+                "Активен"
+            )
+
+            self.start_pulse()
 
         else:
 
@@ -1354,9 +1863,15 @@ class PinVPN(QWidget):
             )
 
             self.status_label.setStyleSheet(
-                "color: #aeb4c3;"
-                "font-size: 21px;"
-                "font-weight: 700;"
+                f"""
+                color: {MUTED};
+                font-size: 22px;
+                font-weight: 800;
+                """
+            )
+
+            self.status_hint.setText(
+                "Ваше соединение не защищено"
             )
 
             self.connect_button.setText(
@@ -1364,21 +1879,75 @@ class PinVPN(QWidget):
             )
 
             self.connect_button.setStyleSheet(
-                """
-                QPushButton#vpnButton {
-                    background: #1b1e26;
-                    border: 5px solid #ff2f7d;
-                    border-radius: 125px;
+                f"""
+                QPushButton#vpnButton {{
+                    background: #12151c;
+                    border: 5px solid {PINK};
+                    border-radius: 115px;
                     color: white;
-                    font-size: 22px;
+                    font-size: 20px;
                     font-weight: 800;
-                }
+                }}
 
-                QPushButton#vpnButton:hover {
-                    background: #232630;
-                }
+                QPushButton#vpnButton:hover {{
+                    background: #1a1e27;
+                }}
                 """
             )
+
+            self.stop_pulse()
+
+            if self.info_label.text() == "":
+                self.info_label.setText(
+                    "Выберите устройство и подключитесь к PinVPN"
+                )
+
+    # ========================================================
+    # PULSE
+    # ========================================================
+
+    def start_pulse(self):
+
+        if self.pulse_animation is not None:
+
+            return
+
+        self.pulse_animation = QPropertyAnimation(
+            self.connect_button,
+            b"minimumSize"
+        )
+
+        self.pulse_animation.setDuration(
+            1200
+        )
+
+        self.pulse_animation.setStartValue(
+            self.connect_button.minimumSize()
+        )
+
+        self.pulse_animation.setEndValue(
+            self.connect_button.minimumSize()
+        )
+
+        self.pulse_animation.setEasingCurve(
+            QEasingCurve.InOutSine
+        )
+
+        self.pulse_animation.setLoopCount(
+            -1
+        )
+
+        self.pulse_animation.start()
+
+    def stop_pulse(self):
+
+        if self.pulse_animation:
+
+            self.pulse_animation.stop()
+
+            self.pulse_animation.deleteLater()
+
+            self.pulse_animation = None
 
     # ========================================================
     # TOGGLE
@@ -1432,6 +2001,18 @@ class PinVPN(QWidget):
             "ПОДКЛЮЧЕНИЕ..."
         )
 
+        self.status_label.setStyleSheet(
+            f"""
+            color: {PINK};
+            font-size: 22px;
+            font-weight: 800;
+            """
+        )
+
+        self.status_hint.setText(
+            "Устанавливаем защищённое соединение"
+        )
+
         try:
 
             config = (
@@ -1483,6 +2064,14 @@ class PinVPN(QWidget):
 
         self.status_label.setText(
             "ОТКЛЮЧЕНИЕ..."
+        )
+
+        self.status_label.setStyleSheet(
+            f"""
+            color: {MUTED};
+            font-size: 22px;
+            font-weight: 800;
+            """
         )
 
         try:
@@ -1546,6 +2135,8 @@ class PinVPN(QWidget):
 
         self.devices = []
 
+        self.current_username = ""
+
         self.device_box.clear()
 
         self.pages.setCurrentIndex(
@@ -1567,7 +2158,9 @@ class PinVPN(QWidget):
         event
     ):
 
-        # VPN не отключаем.
+        # VPN намеренно не отключаем.
+        self.stop_pulse()
+
         event.accept()
 
 
@@ -1582,6 +2175,10 @@ if __name__ == "__main__":
     )
 
     app.setApplicationName(
+        "PinVPN"
+    )
+
+    app.setApplicationDisplayName(
         "PinVPN"
     )
 
