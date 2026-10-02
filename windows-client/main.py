@@ -4,6 +4,7 @@ import json
 import socket
 import traceback
 import keyring
+from shiboken6 import isValid
 import requests
 
 from PySide6.QtCore import Qt, QTimer, Signal, QPropertyAnimation, QEasingCurve, QSize
@@ -19,7 +20,8 @@ SERVER_URL = "https://pinvpn.onrender.com"
 SERVICE_HOST = "127.0.0.1"
 SERVICE_PORT = 47811
 SERVICE_TOKEN_FILE = r"C:\ProgramData\PinVPN\service.token"
-GUI_LOG_FILE = r"C:\ProgramData\PinVPN\Runtime\gui.log"
+BUILD_ID = "1.0.3 / 36bfe6b"
+GUI_LOG_FILE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "PinVPN", "gui.log")
 
 KEYRING_SERVICE = "PinVPN"
 KEYRING_USERNAME = "client_token"
@@ -371,7 +373,7 @@ class PinVPN(QWidget):
         side.addWidget(self.side_item("◌   СЕТЬ"))
         side.addStretch()
 
-        version = QLabel("PINVPN DESKTOP\nVERSION 1.0.2")
+        version = QLabel("PINVPN DESKTOP\nVERSION 1.0.3\nBUILD 36BFE6B")
         version.setObjectName("sideVersion")
         side.addWidget(version)
 
@@ -795,6 +797,14 @@ class PinVPN(QWidget):
 
     def refresh_service_status(self):
         try:
+            if not isValid(self) or not isValid(self.service_label):
+                return
+            if not isValid(self.info_label) or not isValid(self.connect_button):
+                return
+        except RuntimeError:
+            return
+
+        try:
             response = service_request("status")
             self.service_label.setText("●  Работает")
             self.service_label.setStyleSheet(f"color: {GREEN};")
@@ -805,22 +815,32 @@ class PinVPN(QWidget):
         except Exception as error:
             message = str(error).strip() or f"{type(error).__name__}"
 
-            if hasattr(self, "service_label"):
+            if isValid(self.service_label):
                 self.service_label.setText("●  Ошибка")
                 self.service_label.setStyleSheet(f"color: {RED};")
                 self.service_label.setToolTip(message)
 
-            if hasattr(self, "info_label"):
+            if isValid(self.info_label):
                 self.info_label.setText(
                     "Ошибка PinVPN Service. Наведите курсор на статус службы."
                 )
 
             self.connected = False
 
-            if hasattr(self, "connect_button"):
+            if isValid(self.connect_button):
                 self.update_vpn_ui()
 
     def update_vpn_ui(self):
+        try:
+            if not isValid(self) or not isValid(self.status_label):
+                return
+            if not isValid(self.status_hint) or not isValid(self.connect_button):
+                return
+            if not isValid(self.ipv6_value) or not isValid(self.info_label):
+                return
+        except RuntimeError:
+            return
+
         if self.connected:
             self.status_label.setText("ПОДКЛЮЧЕНО")
             self.status_label.setStyleSheet(
@@ -922,12 +942,15 @@ class PinVPN(QWidget):
         self.token = None
         self.devices = []
         self.current_username = ""
+        self.service_timer.stop()
         self.device_box.clear()
         self.pages.setCurrentIndex(0)
         self.password.clear()
         self.login_status.setText("")
 
     def closeEvent(self, event):
+        if hasattr(self, "service_timer"):
+            self.service_timer.stop()
         event.accept()
 
 
