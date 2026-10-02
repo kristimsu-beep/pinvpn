@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import socket
+import traceback
 import keyring
 import requests
 
@@ -18,6 +19,7 @@ SERVER_URL = "https://pinvpn.onrender.com"
 SERVICE_HOST = "127.0.0.1"
 SERVICE_PORT = 47811
 SERVICE_TOKEN_FILE = r"C:\ProgramData\PinVPN\service.token"
+GUI_LOG_FILE = r"C:\ProgramData\PinVPN\Runtime\gui.log"
 
 KEYRING_SERVICE = "PinVPN"
 KEYRING_USERNAME = "client_token"
@@ -37,50 +39,95 @@ MUTED = "#858c9c"
 DIM = "#555d6d"
 
 
+def write_gui_log(message):
+    try:
+        folder = os.path.dirname(GUI_LOG_FILE)
+        os.makedirs(folder, exist_ok=True)
+        with open(GUI_LOG_FILE, "a", encoding="utf-8") as file:
+            file.write(message.rstrip() + "\n")
+    except Exception:
+        pass
+
+
 def read_service_token():
     if not os.path.exists(SERVICE_TOKEN_FILE):
         raise Exception("PinVPN Service не установлена.")
-    with open(SERVICE_TOKEN_FILE, "r", encoding="utf-8") as file:
-        token = file.read().strip()
+
+    try:
+        with open(SERVICE_TOKEN_FILE, "r", encoding="utf-8") as file:
+            token = file.read().strip()
+    except OSError as error:
+        raise Exception(
+            "Не удалось прочитать токен PinVPN Service.\n\n"
+            f"{type(error).__name__}: {error}"
+        )
+
     if not token:
         raise Exception("Токен PinVPN Service пуст.")
+
     return token
 
 
 def service_request(action, config=None):
-    token = read_service_token()
-    payload = {"action": action, "token": token}
-    if config is not None:
-        payload["config"] = config
-
-    message = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
-
     try:
-        with socket.create_connection((SERVICE_HOST, SERVICE_PORT), timeout=10) as sock:
+        token = read_service_token()
+        payload = {"action": action, "token": token}
+
+        if config is not None:
+            payload["config"] = config
+
+        message = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+
+        with socket.create_connection(
+            (SERVICE_HOST, SERVICE_PORT),
+            timeout=10,
+        ) as sock:
+            sock.settimeout(10)
             sock.sendall(message)
+
             data = b""
+
             while True:
                 part = sock.recv(65536)
+
                 if not part:
                     break
+
                 data += part
+
                 if b"\n" in part:
                     break
-    except OSError as error:
-        raise Exception("PinVPN Service недоступна.\n\n" + str(error))
 
-    if not data:
-        raise Exception("PinVPN Service не ответила.")
+        if not data:
+            raise Exception("PinVPN Service не ответила.")
 
-    try:
-        response = json.loads(data.decode("utf-8").strip())
-    except json.JSONDecodeError:
-        raise Exception("PinVPN Service вернула некорректный ответ.")
+        raw_response = data.decode("utf-8").strip()
 
-    if response.get("status") != "ok":
-        raise Exception(response.get("error", "Ошибка PinVPN Service."))
+        try:
+            response = json.loads(raw_response)
+        except json.JSONDecodeError as error:
+            raise Exception(
+                "PinVPN Service вернула некорректный ответ.\n\n"
+                f"{type(error).__name__}: {error}\n"
+                f"Ответ: {raw_response[:500]}"
+            )
 
-    return response
+        if response.get("status") != "ok":
+            raise Exception(
+                response.get("error", "Ошибка PinVPN Service.")
+            )
+
+        return response
+
+    except Exception as error:
+        write_gui_log(
+            "SERVICE REQUEST ERROR\n"
+            f"Action: {action}\n"
+            f"Type: {type(error).__name__}\n"
+            f"Error: {error}\n"
+            f"{traceback.format_exc()}"
+        )
+        raise
 
 
 def save_login(token, username):
@@ -157,7 +204,6 @@ class GlowButton(QPushButton):
             pulse *= 0.35
         radius = base + pulse
 
-        # Ambient rings.
         for width, alpha, extra in ((15, 10, 18), (9, 18, 10), (4, 55, 3)):
             color = QColor(GREEN if self.active else PINK)
             color.setAlpha(alpha)
@@ -165,7 +211,6 @@ class GlowButton(QPushButton):
             painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(center, int(radius + extra), int(radius + extra))
 
-        # Main disc.
         gradient = QLinearGradient(0, 35, 0, 215)
         if self.active:
             gradient.setColorAt(0.0, QColor("#17261f"))
@@ -180,7 +225,6 @@ class GlowButton(QPushButton):
         painter.setPen(QPen(ring, 5))
         painter.drawEllipse(center, int(radius), int(radius))
 
-        # Inner icon.
         icon_pen = QPen(QColor(GREEN if self.active else WHITE), 4)
         painter.setPen(icon_pen)
         painter.setBrush(Qt.NoBrush)
@@ -649,6 +693,12 @@ class PinVPN(QWidget):
         except Exception as error:
             self.token = None
             self.login_status.setText("Ошибка входа.")
+            write_gui_log(
+                "LOGIN ERROR\n"
+                f"Type: {type(error).__name__}\n"
+                f"Error: {error}\n"
+                f"{traceback.format_exc()}"
+            )
             QMessageBox.critical(self, "PinVPN", str(error))
         finally:
             self.login_button.setEnabled(True)
@@ -703,6 +753,13 @@ class PinVPN(QWidget):
             self.refresh_service_status()
 
         except Exception as error:
+            write_gui_log(
+                "LOAD DEVICES ERROR\n"
+                f"Automatic: {automatic}\n"
+                f"Type: {type(error).__name__}\n"
+                f"Error: {error}\n"
+                f"{traceback.format_exc()}"
+            )
             if automatic:
                 self.token = None
                 clear_saved_login()
@@ -741,13 +798,25 @@ class PinVPN(QWidget):
             response = service_request("status")
             self.service_label.setText("●  Работает")
             self.service_label.setStyleSheet(f"color: {GREEN};")
+            self.service_label.setToolTip("")
             self.connected = bool(response.get("connected", False))
             self.update_vpn_ui()
-        except Exception:
+
+        except Exception as error:
+            message = str(error).strip() or f"{type(error).__name__}"
+
             if hasattr(self, "service_label"):
-                self.service_label.setText("●  Недоступен")
+                self.service_label.setText("●  Ошибка")
                 self.service_label.setStyleSheet(f"color: {RED};")
+                self.service_label.setToolTip(message)
+
+            if hasattr(self, "info_label"):
+                self.info_label.setText(
+                    "Ошибка PinVPN Service. Наведите курсор на статус службы."
+                )
+
             self.connected = False
+
             if hasattr(self, "connect_button"):
                 self.update_vpn_ui()
 
@@ -809,6 +878,12 @@ class PinVPN(QWidget):
         except Exception as error:
             self.connected = False
             self.update_vpn_ui()
+            write_gui_log(
+                "CONNECT ERROR\n"
+                f"Type: {type(error).__name__}\n"
+                f"Error: {error}\n"
+                f"{traceback.format_exc()}"
+            )
             QMessageBox.critical(self, "PinVPN", str(error))
         finally:
             self.connect_button.setEnabled(True)
@@ -823,6 +898,12 @@ class PinVPN(QWidget):
             self.info_label.setText("Соединение отключено")
             self.update_vpn_ui()
         except Exception as error:
+            write_gui_log(
+                "DISCONNECT ERROR\n"
+                f"Type: {type(error).__name__}\n"
+                f"Error: {error}\n"
+                f"{traceback.format_exc()}"
+            )
             QMessageBox.warning(self, "PinVPN", str(error))
         finally:
             self.connect_button.setEnabled(True)
