@@ -1,0 +1,60 @@
+name: Build PinVPN Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        shell: powershell
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r windows-client/requirements.txt
+          pip install pyinstaller
+
+      - name: Build PinVPN
+        shell: powershell
+        working-directory: windows-client
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name PinVPN main.py
+
+      - name: Build PinVPNService
+        shell: powershell
+        working-directory: windows-client
+        run: pyinstaller --noconfirm --clean --onefile --name PinVPNService pinvpn_service.py
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: powershell
+        working-directory: windows-client/installer
+        run: iscc PinVPN.iss
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: PinVPN-Setup-v1.0.2
+          path: windows-client/installer-output/PinVPN-Setup.exe
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PinVPN v1.0.2
+          generate_release_notes: true
+          files: windows-client/installer-output/PinVPN-Setup.exe
