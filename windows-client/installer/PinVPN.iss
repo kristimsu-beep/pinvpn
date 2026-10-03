@@ -1,5 +1,5 @@
 #define MyAppName "PinVPN"
-#define MyAppVersion "1.0.3"
+#define MyAppVersion "1.0.4"
 #define MyAppPublisher "PinVPN"
 
 #define MyAppExeName "PinVPN.exe"
@@ -14,7 +14,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\PinVPN
 DefaultGroupName=PinVPN
 OutputDir=..\installer-output
-OutputBaseFilename=PinVPN-Setup-v1.0.3
+OutputBaseFilename=PinVPN-Setup-v1.0.4
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
