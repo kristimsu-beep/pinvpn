@@ -3,6 +3,7 @@ import os
 import json
 import socket
 import traceback
+import math
 import keyring
 from shiboken6 import isValid
 import requests
@@ -20,7 +21,7 @@ SERVER_URL = "https://pinvpn.onrender.com"
 SERVICE_HOST = "127.0.0.1"
 SERVICE_PORT = 47811
 SERVICE_TOKEN_FILE = r"C:\ProgramData\PinVPN\service.token"
-BUILD_ID = "1.0.3 / 36bfe6b"
+BUILD_ID = "1.0.4 / 3DCORE"
 GUI_LOG_FILE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "PinVPN", "gui.log")
 
 KEYRING_SERVICE = "PinVPN"
@@ -163,22 +164,27 @@ def add_shadow(widget, color="#000000", blur=32, y=8, opacity=140):
 
 
 class GlowButton(QPushButton):
-    """Large animated PinVPN control button."""
+    """Premium 3D animated PinVPN core button."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.phase = 0.0
         self.active = False
+        self.busy = False
         self.hovered = False
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(270, 270)
+        self.setFixedSize(310, 310)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.animate)
-        self.timer.start(35)
+        self.timer.start(30)
         self.setMouseTracking(True)
 
     def set_active(self, active):
         self.active = active
+        self.update()
+
+    def set_busy(self, busy):
+        self.busy = busy
         self.update()
 
     def enterEvent(self, event):
@@ -192,7 +198,10 @@ class GlowButton(QPushButton):
         super().leaveEvent(event)
 
     def animate(self):
-        self.phase = (self.phase + (0.035 if self.active else 0.02)) % 1.0
+        speed = 0.045 if self.active else 0.028
+        if self.busy:
+            speed = 0.075
+        self.phase = (self.phase + speed) % 1.0
         self.update()
 
     def paintEvent(self, event):
@@ -200,61 +209,142 @@ class GlowButton(QPushButton):
         painter.setRenderHint(QPainter.Antialiasing)
 
         center = self.rect().center()
-        base = 103
-        pulse = 4.0 * (0.5 + 0.5 * __import__("math").sin(self.phase * 6.283185))
-        if not self.active:
-            pulse *= 0.35
-        radius = base + pulse
+        cx, cy = center.x(), center.y()
+        pulse = math.sin(self.phase * math.tau)
+        hover_lift = 4 if self.hovered and not self.busy else 0
+        depth = 13 if not self.hovered else 9
+        base = 108 + (2.5 * pulse if self.active or self.busy else 0)
+        if self.busy:
+            base += 2
 
-        glow_color = QColor(GREEN if self.active else PINK)
-        glow_levels = ((24, 12, 24), (15, 24, 15), (7, 70, 5))
-        for width, alpha, extra in glow_levels:
-            color = QColor(glow_color)
+        accent = QColor(GREEN if self.active else PINK)
+        if self.busy:
+            accent = QColor(PINK_SOFT)
+
+        # Атмосферное неоновое свечение.
+        for radius, alpha, width in (
+            (base + 42, 10, 18),
+            (base + 31, 18, 13),
+            (base + 21, 30, 8),
+        ):
+            color = QColor(accent)
             color.setAlpha(alpha)
             painter.setPen(QPen(color, width))
             painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(center, int(radius + extra), int(radius + extra))
+            painter.drawEllipse(center, int(radius), int(radius))
 
-        if self.active:
-            for extra, alpha in ((28, 18), (20, 28), (13, 42)):
-                color = QColor(GREEN)
-                color.setAlpha(alpha)
-                painter.setPen(QPen(color, 3))
-                painter.drawEllipse(center, int(radius + extra), int(radius + extra))
-
-        gradient = QLinearGradient(0, 35, 0, 215)
-        if self.active:
-            gradient.setColorAt(0.0, QColor("#2cff9a"))
-            gradient.setColorAt(0.38, QColor("#0fcf72"))
-            gradient.setColorAt(1.0, QColor("#063b27"))
-            ring = QColor("#7affbc")
-        else:
-            gradient.setColorAt(0.0, QColor("#171a22"))
-            gradient.setColorAt(1.0, QColor("#0e1016"))
-            ring = QColor(PINK)
-
-        painter.setBrush(QBrush(gradient))
-        painter.setPen(QPen(ring, 6))
-        painter.drawEllipse(center, int(radius), int(radius))
-
-        if self.active:
-            inner = QLinearGradient(0, 75, 0, 195)
-            inner.setColorAt(0.0, QColor("#43ffab"))
-            inner.setColorAt(1.0, QColor("#0a6f45"))
-            painter.setBrush(QBrush(inner))
-            painter.setPen(Qt.NoPen)
-            painter.drawEllipse(center, int(radius - 13), int(radius - 13))
-
-        icon_pen = QPen(QColor("#062417" if self.active else WHITE), 5)
-        painter.setPen(icon_pen)
+        # Вращающееся энергетическое кольцо.
+        ring_alpha = 80 + int(35 * (0.5 + 0.5 * pulse))
+        ring_color = QColor(accent.red(), accent.green(), accent.blue(), ring_alpha)
+        painter.setPen(QPen(ring_color, 2))
         painter.setBrush(Qt.NoBrush)
-        painter.drawArc(center.x() - 35, center.y() - 35, 70, 70, 35 * 16, 290 * 16)
-        painter.drawLine(center.x(), center.y() - 39, center.x(), center.y() - 20)
+        ring_r = int(base + 25)
+        painter.drawArc(cx - ring_r, cy - ring_r, ring_r * 2, ring_r * 2,
+                        int(self.phase * 360 * 16), 230 * 16)
+        painter.drawArc(cx - ring_r, cy - ring_r, ring_r * 2, ring_r * 2,
+                        int(self.phase * 360 * 16 + 250 * 16), 65 * 16)
 
-        painter.setPen(QColor(GREEN if self.active else WHITE))
-        painter.setFont(QFont("Segoe UI", 11, QFont.Bold))
-        text = "ОТКЛЮЧИТЬ" if self.active else "ПОДКЛЮЧИТЬ"
-        painter.drawText(center.x() - 65, center.y() + 61, 130, 28, Qt.AlignCenter, text)
+        # Нижняя часть корпуса — создаёт настоящий 3-D эффект.
+        shadow_gradient = QLinearGradient(0, cy - base, 0, cy + base + depth)
+        shadow_gradient.setColorAt(0.0, QColor("#0b0d12"))
+        shadow_gradient.setColorAt(0.72, QColor("#050609"))
+        shadow_gradient.setColorAt(1.0, QColor("#020305"))
+        painter.setBrush(QBrush(shadow_gradient))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(cx - int(base), cy - int(base) + depth,
+                            int(base * 2), int(base * 2))
+
+        # Основная глянцевая сфера.
+        top_offset = -hover_lift
+        sphere_gradient = QLinearGradient(
+            0, cy - base + top_offset,
+            0, cy + base + top_offset
+        )
+
+        if self.active:
+            sphere_gradient.setColorAt(0.0, QColor("#63ffc0"))
+            sphere_gradient.setColorAt(0.18, QColor("#1df28d"))
+            sphere_gradient.setColorAt(0.55, QColor("#0aa85d"))
+            sphere_gradient.setColorAt(0.82, QColor("#075033"))
+            sphere_gradient.setColorAt(1.0, QColor("#021a10"))
+            edge = QColor("#8affc9")
+        else:
+            sphere_gradient.setColorAt(0.0, QColor("#343946"))
+            sphere_gradient.setColorAt(0.18, QColor("#1d202a"))
+            sphere_gradient.setColorAt(0.58, QColor("#10131b"))
+            sphere_gradient.setColorAt(0.86, QColor("#090b10"))
+            sphere_gradient.setColorAt(1.0, QColor("#030406"))
+            edge = QColor(PINK_SOFT)
+
+        sx, sy = cx, cy + top_offset
+        painter.setBrush(QBrush(sphere_gradient))
+        painter.setPen(QPen(edge, 5))
+        painter.drawEllipse(sx - int(base), sy - int(base),
+                            int(base * 2), int(base * 2))
+
+        # Внутренний фасочный контур.
+        inner_r = int(base - 15)
+        inner_color = QColor(accent)
+        inner_color.setAlpha(115)
+        painter.setPen(QPen(inner_color, 2))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(sx - inner_r, sy - inner_r, inner_r * 2, inner_r * 2)
+
+        # Блик сверху.
+        highlight = QLinearGradient(0, sy - base, 0, sy - 5)
+        highlight.setColorAt(0.0, QColor(255, 255, 255, 115))
+        highlight.setColorAt(0.28, QColor(255, 255, 255, 35))
+        highlight.setColorAt(1.0, QColor(255, 255, 255, 0))
+        painter.setBrush(QBrush(highlight))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(
+            sx - int(base - 9),
+            sy - int(base - 9),
+            int((base - 9) * 2),
+            int(base * 0.88)
+        )
+
+        # Центральная кнопка.
+        plate_r = 63
+        plate_gradient = QLinearGradient(0, sy - plate_r, 0, sy + plate_r)
+        if self.active:
+            plate_gradient.setColorAt(0.0, QColor("#b9ffe0"))
+            plate_gradient.setColorAt(0.35, QColor("#3effa7"))
+            plate_gradient.setColorAt(1.0, QColor("#0b7449"))
+            plate_edge = QColor("#d7ffea")
+            icon_color = QColor("#042519")
+        else:
+            plate_gradient.setColorAt(0.0, QColor("#292d38"))
+            plate_gradient.setColorAt(1.0, QColor("#0c0f15"))
+            plate_edge = QColor("#555d6d")
+            icon_color = QColor(WHITE)
+
+        painter.setBrush(QBrush(plate_gradient))
+        painter.setPen(QPen(plate_edge, 3))
+        painter.drawEllipse(sx - plate_r, sy - plate_r, plate_r * 2, plate_r * 2)
+
+        # Кнопка питания.
+        painter.setPen(QPen(icon_color, 6, Qt.SolidLine, Qt.RoundCap))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawArc(cx - 28, sy - 28, 56, 56, 35 * 16, 290 * 16)
+        painter.drawLine(cx, sy - 34, cx, sy - 12)
+
+        painter.setPen(QColor("#042519" if self.active else WHITE))
+        painter.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        if self.busy:
+            text = "ПОДОЖДИТЕ"
+        elif self.active:
+            text = "ОТКЛЮЧИТЬ"
+        else:
+            text = "ПОДКЛЮЧИТЬ"
+        painter.drawText(cx - 78, sy + 88, 156, 26, Qt.AlignCenter, text)
+
+        state_color = QColor(GREEN if self.active else PINK)
+        if self.busy:
+            state_color = QColor(PINK_SOFT)
+        painter.setBrush(state_color)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(cx - 4, sy + 112, 8, 8)
 
 
 class PinVPN(QWidget):
@@ -264,6 +354,7 @@ class PinVPN(QWidget):
         self.token = None
         self.devices = []
         self.connected = False
+        self.busy = False
         self.current_username = ""
 
         self.setWindowTitle("PinVPN")
@@ -367,11 +458,11 @@ class PinVPN(QWidget):
 
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(245)
+        sidebar.setFixedWidth(250)
 
         side = QVBoxLayout(sidebar)
         side.setContentsMargins(24, 28, 24, 24)
-        side.setSpacing(10)
+        side.setSpacing(8)
 
         logo = QLabel("PinVPN")
         logo.setObjectName("sideLogo")
@@ -380,36 +471,41 @@ class PinVPN(QWidget):
         sub = QLabel("SECURE INTERNET")
         sub.setObjectName("sideSubtitle")
         side.addWidget(sub)
-        side.addSpacing(32)
+        side.addSpacing(30)
 
         active = QLabel("●   ПОДКЛЮЧЕНИЕ")
         active.setObjectName("sideActive")
         side.addWidget(active)
 
-        side.addSpacing(8)
+        side.addSpacing(7)
         side.addWidget(self.side_item("◌   УСТРОЙСТВА"))
         side.addWidget(self.side_item("◌   СЕТЬ"))
         side.addStretch()
 
-        version = QLabel("PINVPN DESKTOP\nVERSION 1.0.3\nBUILD 36BFE6B")
+        security = QLabel("●  ЗАЩИЩЕНО")
+        security.setObjectName("sideSecurity")
+        side.addWidget(security)
+
+        version = QLabel("PINVPN DESKTOP
+VERSION 1.0.4
+BUILD 3DCORE")
         version.setObjectName("sideVersion")
         side.addWidget(version)
 
         content = QWidget()
         content.setObjectName("content")
         main = QVBoxLayout(content)
-        main.setContentsMargins(30, 26, 30, 26)
-        main.setSpacing(18)
+        main.setContentsMargins(34, 28, 34, 26)
+        main.setSpacing(16)
 
         header = QHBoxLayout()
         title_box = QVBoxLayout()
-        title_box.setSpacing(2)
+        title_box.setSpacing(3)
 
         title = QLabel("Подключение")
         title.setObjectName("pageTitle")
-        subtitle = QLabel("Управление защищённым соединением")
+        subtitle = QLabel("Ваш защищённый туннель в реальном времени")
         subtitle.setObjectName("pageSubtitle")
-
         title_box.addWidget(title)
         title_box.addWidget(subtitle)
         header.addLayout(title_box)
@@ -422,35 +518,44 @@ class PinVPN(QWidget):
         main.addLayout(header)
 
         top = QHBoxLayout()
-        top.setSpacing(16)
+        top.setSpacing(14)
 
         device_card = self.make_card()
         dl = QVBoxLayout(device_card)
-        dl.setContentsMargins(20, 16, 20, 16)
-        dl.setSpacing(7)
+        dl.setContentsMargins(20, 14, 20, 14)
+        dl.setSpacing(6)
         dl.addWidget(self.caption("УСТРОЙСТВО"))
-
         self.device_box = QComboBox()
-        self.device_box.setMinimumHeight(44)
+        self.device_box.setMinimumHeight(42)
         dl.addWidget(self.device_box)
         top.addWidget(device_card, 2)
 
         service_card = self.make_card()
         sl = QVBoxLayout(service_card)
-        sl.setContentsMargins(20, 16, 20, 16)
-        sl.setSpacing(7)
+        sl.setContentsMargins(20, 14, 20, 14)
+        sl.setSpacing(6)
         sl.addWidget(self.caption("PINVPN SERVICE"))
-
         self.service_label = QLabel("●  Проверка...")
         self.service_label.setObjectName("serviceValue")
         sl.addWidget(self.service_label)
         top.addWidget(service_card, 1)
 
+        state_card = self.make_card()
+        st = QVBoxLayout(state_card)
+        st.setContentsMargins(20, 14, 20, 14)
+        st.setSpacing(6)
+        st.addWidget(self.caption("ЗАЩИТА"))
+        self.state_chip = QLabel("НЕ АКТИВНА")
+        self.state_chip.setObjectName("stateChip")
+        st.addWidget(self.state_chip)
+        top.addWidget(state_card, 1)
+
         main.addLayout(top)
 
         center = self.make_card("vpnCard")
         center_layout = QVBoxLayout(center)
-        center_layout.setContentsMargins(28, 16, 28, 16)
+        center_layout.setContentsMargins(28, 8, 28, 8)
+        center_layout.setSpacing(0)
         center_layout.setAlignment(Qt.AlignCenter)
 
         self.status_label = QLabel("НЕ ПОДКЛЮЧЕНО")
@@ -470,16 +575,14 @@ class PinVPN(QWidget):
 
         center_layout.addWidget(self.status_label)
         center_layout.addWidget(self.status_hint)
-        center_layout.addSpacing(8)
         center_layout.addWidget(self.connect_button, alignment=Qt.AlignCenter)
-        center_layout.addSpacing(7)
         center_layout.addWidget(self.info_label)
 
         main.addWidget(center, 1)
-        add_shadow(center, blur=40, y=10, opacity=130)
+        add_shadow(center, blur=46, y=12, opacity=150)
 
         bottom = QHBoxLayout()
-        bottom.setSpacing(16)
+        bottom.setSpacing(14)
 
         self.protocol_value = QLabel("WireGuard")
         bottom.addWidget(self.info_card("ПРОТОКОЛ", self.protocol_value))
@@ -489,6 +592,9 @@ class PinVPN(QWidget):
 
         self.ipv6_value = QLabel("Ожидание")
         bottom.addWidget(self.info_card("VPN IPv6", self.ipv6_value))
+
+        self.ping_value = QLabel("—")
+        bottom.addWidget(self.info_card("ЗАДЕРЖКА", self.ping_value))
 
         root.addWidget(sidebar)
         root.addWidget(content, 1)
@@ -520,26 +626,38 @@ class PinVPN(QWidget):
             font-family: "Segoe UI";
             color: {TEXT};
         }}
-        #loginPage, #mainPage, #content {{
-            background: {BG};
+        #loginPage {{
+            background: qradialgradient(cx:0.5, cy:0.25, radius:1.0,
+                stop:0 #17111a, stop:0.42 #0b0b10, stop:1 #050609);
+        }}
+        #mainPage, #content {{
+            background: qradialgradient(cx:0.45, cy:0.42, radius:1.0,
+                stop:0 #15111a, stop:0.34 #0b0d13, stop:1 #06070a);
         }}
         #sidebar {{
-            background: {SIDEBAR};
-            border-right: 1px solid {BORDER};
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 #090a0f, stop:1 #0d0f15);
+            border-right: 1px solid #20242d;
         }}
         #card, #loginCard {{
-            background: {CARD};
-            border: 1px solid {BORDER};
-            border-radius: 20px;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #141720, stop:1 #0d1016);
+            border: 1px solid #252a35;
+            border-radius: 18px;
         }}
-        #loginCard {{
-            border-radius: 26px;
+        #loginCard {{ border-radius: 26px; }}
+        #vpnCard {{
+            background: qradialgradient(cx:0.5, cy:0.44, radius:0.72,
+                stop:0 #17131d, stop:0.45 #10121a, stop:1 #0a0c11);
+            border: 1px solid #2a2e3a;
+            border-radius: 28px;
         }}
         #loginLogo, #sideLogo {{
             color: {WHITE};
             font-size: 34px;
             font-weight: 900;
         }}
+        #sideLogo {{ font-size: 31px; }}
         #loginSubtitle, #sideSubtitle {{
             color: {PINK};
             font-size: 10px;
@@ -550,19 +668,16 @@ class PinVPN(QWidget):
             color: {TEXT};
             font-size: 20px;
             font-weight: 700;
-            line-height: 1.3;
         }}
         QLineEdit {{
-            background: #0c0f15;
-            border: 1px solid {BORDER};
+            background: #0a0d12;
+            border: 1px solid #262b36;
             border-radius: 12px;
             padding: 0 16px;
             color: {WHITE};
             font-size: 14px;
         }}
-        QLineEdit:focus {{
-            border: 1px solid {PINK};
-        }}
+        QLineEdit:focus {{ border: 1px solid {PINK}; }}
         #primaryButton {{
             background: {PINK};
             border: 0;
@@ -571,80 +686,75 @@ class PinVPN(QWidget):
             font-size: 13px;
             font-weight: 900;
         }}
-        #primaryButton:hover {{
-            background: {PINK_SOFT};
-        }}
-        #primaryButton:disabled {{
-            background: #5a263d;
-            color: #a88b98;
-        }}
+        #primaryButton:hover {{ background: {PINK_SOFT}; }}
+        #primaryButton:disabled {{ background: #5a263d; color: #a88b98; }}
         #pageTitle {{
             color: {WHITE};
-            font-size: 28px;
-            font-weight: 850;
+            font-size: 29px;
+            font-weight: 900;
         }}
         #pageSubtitle, #statusHint {{
-            color: {MUTED};
+            color: #8f96a6;
             font-size: 12px;
         }}
         #accountButton {{
             background: #11151d;
-            border: 1px solid {BORDER};
-            border-radius: 11px;
-            padding: 9px 15px;
+            border: 1px solid #292e39;
+            border-radius: 12px;
+            padding: 10px 16px;
             color: {TEXT};
-            font-weight: 700;
+            font-weight: 750;
         }}
-        #accountButton:hover {{
-            background: {CARD_HOVER};
-            border-color: #343a47;
-        }}
+        #accountButton:hover {{ background: #171b24; border-color: #414754; }}
         #smallTitle {{
-            color: {DIM};
+            color: #626a7a;
             font-size: 9px;
             font-weight: 900;
-            letter-spacing: 1.4px;
+            letter-spacing: 1.5px;
         }}
         QComboBox {{
-            background: #0c0f15;
-            border: 1px solid {BORDER};
+            background: #0b0e14;
+            border: 1px solid #272c37;
             border-radius: 10px;
             padding: 0 12px;
             color: {TEXT};
             font-size: 13px;
         }}
-        QComboBox:hover, QComboBox:focus {{
-            border-color: #343a47;
-        }}
+        QComboBox:hover, QComboBox:focus {{ border-color: #444a58; }}
         QComboBox QAbstractItemView {{
             background: #11151d;
-            border: 1px solid {BORDER};
-            selection-background-color: #252a35;
+            border: 1px solid #303642;
+            selection-background-color: #272d38;
             color: {TEXT};
         }}
         #serviceValue {{
             color: {GREEN};
             font-size: 13px;
-            font-weight: 750;
+            font-weight: 800;
+        }}
+        #stateChip {{
+            color: {PINK};
+            font-size: 12px;
+            font-weight: 900;
         }}
         #mainStatus {{
-            color: {MUTED};
-            font-size: 21px;
+            color: #aeb4c0;
+            font-size: 23px;
             font-weight: 900;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
         }}
         #centerInfo {{
-            color: {MUTED};
+            color: #767e8e;
             font-size: 11px;
         }}
         #infoValue {{
             color: {TEXT};
             font-size: 14px;
-            font-weight: 750;
+            font-weight: 800;
         }}
         #sideActive {{
-            background: #18111a;
-            border: 1px solid #34202c;
+            background: #19101a;
+            border: 1px solid #3a2130;
             border-radius: 10px;
             padding: 12px 10px;
             color: {PINK};
@@ -653,19 +763,26 @@ class PinVPN(QWidget):
         }}
         #sideItem {{
             padding: 11px 10px;
-            color: {DIM};
+            color: #5f6776;
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 750;
+        }}
+        #sideItem:hover {{ color: #aab0bc; }}
+        #sideSecurity {{
+            background: #0d1713;
+            border: 1px solid #173c2b;
+            border-radius: 10px;
+            padding: 10px;
+            color: {GREEN};
+            font-size: 10px;
+            font-weight: 850;
         }}
         #sideVersion {{
             color: #454c59;
             font-size: 9px;
             line-height: 1.5;
         }}
-        #loginStatus {{
-            color: {RED};
-            font-size: 11px;
-        }}
+        #loginStatus {{ color: {RED}; font-size: 11px; }}
         """)
 
     def try_auto_login(self):
@@ -759,6 +876,7 @@ class PinVPN(QWidget):
 
             self.pages.setCurrentIndex(1)
             self.connect_button.setEnabled(bool(self.devices))
+            self.connect_button.set_busy(False)
             self.account_button.setText(
                 f"●  {self.current_username or 'Аккаунт'}"
             )
@@ -859,34 +977,46 @@ class PinVPN(QWidget):
         except RuntimeError:
             return
 
+        if self.busy:
+            return
+
         if self.connected:
             self.status_label.setText("ПОДКЛЮЧЕНО")
             self.status_label.setStyleSheet(
-                f"color: {GREEN}; font-size: 21px; font-weight: 900; letter-spacing: 1px;"
+                f"color: {GREEN}; font-size: 23px; font-weight: 900; letter-spacing: 1.5px;"
             )
             self.status_hint.setText("Ваше соединение защищено")
             self.connect_button.set_active(True)
             self.ipv6_value.setText("Активен")
             self.info_label.setText("Защищённое соединение активно")
+            if isValid(self.state_chip):
+                self.state_chip.setText("●  ЗАЩИЩЕНО")
+                self.state_chip.setStyleSheet(f"color: {GREEN}; font-weight: 900;")
         else:
             self.status_label.setText("НЕ ПОДКЛЮЧЕНО")
             self.status_label.setStyleSheet(
-                f"color: {MUTED}; font-size: 21px; font-weight: 900; letter-spacing: 1px;"
+                f"color: {MUTED}; font-size: 23px; font-weight: 900; letter-spacing: 1.5px;"
             )
             self.status_hint.setText("Ваше соединение не защищено")
             self.connect_button.set_active(False)
             self.ipv6_value.setText("Ожидание")
+            if isValid(self.state_chip):
+                self.state_chip.setText("НЕ АКТИВНА")
+                self.state_chip.setStyleSheet(f"color: {PINK}; font-weight: 900;")
             if self.info_label.text() == "":
-                self.info_label.setText(
-                    "Выберите устройство и подключитесь к PinVPN"
-                )
+                self.info_label.setText("Выберите устройство и подключитесь к PinVPN")
 
     def set_busy(self, busy, text):
+        self.busy = busy
+        self.connect_button.set_busy(busy)
         self.connect_button.setEnabled(not busy)
         self.status_label.setText(text)
         self.status_label.setStyleSheet(
-            f"color: {PINK}; font-size: 21px; font-weight: 900; letter-spacing: 1px;"
+            f"color: {PINK}; font-size: 23px; font-weight: 900; letter-spacing: 1.5px;"
         )
+        if isValid(self.state_chip):
+            self.state_chip.setText("СОЕДИНЕНИЕ...")
+            self.state_chip.setStyleSheet(f"color: {PINK_SOFT}; font-weight: 900;")
 
     def toggle_vpn(self):
         if self.connected:
@@ -924,6 +1054,8 @@ class PinVPN(QWidget):
             )
             QMessageBox.critical(self, "PinVPN", str(error))
         finally:
+            self.busy = False
+            self.connect_button.set_busy(False)
             self.connect_button.setEnabled(True)
 
     def disconnect_vpn(self):
@@ -933,7 +1065,7 @@ class PinVPN(QWidget):
         try:
             service_request("disconnect")
             self.connected = False
-            self.info_label.setText("Соединение отключено")
+            self.info_label.setText("Защищённый туннель отключён")
             self.update_vpn_ui()
         except Exception as error:
             write_gui_log(
@@ -944,6 +1076,8 @@ class PinVPN(QWidget):
             )
             QMessageBox.warning(self, "PinVPN", str(error))
         finally:
+            self.busy = False
+            self.connect_button.set_busy(False)
             self.connect_button.setEnabled(True)
 
     def logout(self):
