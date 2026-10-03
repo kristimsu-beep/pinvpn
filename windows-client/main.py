@@ -8,7 +8,7 @@ from shiboken6 import isValid
 import requests
 
 from PySide6.QtCore import Qt, QTimer, Signal, QPropertyAnimation, QEasingCurve, QSize
-from PySide6.QtGui import QColor, QPainter, QPen, QFont, QLinearGradient
+from PySide6.QtGui import QColor, QPainter, QPen, QFont, QLinearGradient, QBrush
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QMessageBox, QStackedWidget, QFrame,
@@ -171,7 +171,7 @@ class GlowButton(QPushButton):
         self.active = False
         self.hovered = False
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(248, 248)
+        self.setFixedSize(270, 270)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.animate)
         self.timer.start(35)
@@ -206,28 +206,46 @@ class GlowButton(QPushButton):
             pulse *= 0.35
         radius = base + pulse
 
-        for width, alpha, extra in ((15, 10, 18), (9, 18, 10), (4, 55, 3)):
-            color = QColor(GREEN if self.active else PINK)
+        glow_color = QColor(GREEN if self.active else PINK)
+        glow_levels = ((24, 12, 24), (15, 24, 15), (7, 70, 5))
+        for width, alpha, extra in glow_levels:
+            color = QColor(glow_color)
             color.setAlpha(alpha)
             painter.setPen(QPen(color, width))
             painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(center, int(radius + extra), int(radius + extra))
 
+        if self.active:
+            for extra, alpha in ((28, 18), (20, 28), (13, 42)):
+                color = QColor(GREEN)
+                color.setAlpha(alpha)
+                painter.setPen(QPen(color, 3))
+                painter.drawEllipse(center, int(radius + extra), int(radius + extra))
+
         gradient = QLinearGradient(0, 35, 0, 215)
         if self.active:
-            gradient.setColorAt(0.0, QColor("#17261f"))
-            gradient.setColorAt(1.0, QColor("#0d1511"))
-            ring = QColor(GREEN)
+            gradient.setColorAt(0.0, QColor("#2cff9a"))
+            gradient.setColorAt(0.38, QColor("#0fcf72"))
+            gradient.setColorAt(1.0, QColor("#063b27"))
+            ring = QColor("#7affbc")
         else:
             gradient.setColorAt(0.0, QColor("#171a22"))
             gradient.setColorAt(1.0, QColor("#0e1016"))
             ring = QColor(PINK)
 
-        painter.setBrush(gradient)
-        painter.setPen(QPen(ring, 5))
+        painter.setBrush(QBrush(gradient))
+        painter.setPen(QPen(ring, 6))
         painter.drawEllipse(center, int(radius), int(radius))
 
-        icon_pen = QPen(QColor(GREEN if self.active else WHITE), 4)
+        if self.active:
+            inner = QLinearGradient(0, 75, 0, 195)
+            inner.setColorAt(0.0, QColor("#43ffab"))
+            inner.setColorAt(1.0, QColor("#0a6f45"))
+            painter.setBrush(QBrush(inner))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(center, int(radius - 13), int(radius - 13))
+
+        icon_pen = QPen(QColor("#062417" if self.active else WHITE), 5)
         painter.setPen(icon_pen)
         painter.setBrush(Qt.NoBrush)
         painter.drawArc(center.x() - 35, center.y() - 35, 70, 70, 35 * 16, 290 * 16)
@@ -432,7 +450,7 @@ class PinVPN(QWidget):
 
         center = self.make_card("vpnCard")
         center_layout = QVBoxLayout(center)
-        center_layout.setContentsMargins(28, 22, 28, 20)
+        center_layout.setContentsMargins(28, 16, 28, 16)
         center_layout.setAlignment(Qt.AlignCenter)
 
         self.status_label = QLabel("НЕ ПОДКЛЮЧЕНО")
@@ -509,7 +527,7 @@ class PinVPN(QWidget):
             background: {SIDEBAR};
             border-right: 1px solid {BORDER};
         }}
-        #card, #loginCard, #vpnCard {{
+        #card, #loginCard {{
             background: {CARD};
             border: 1px solid {BORDER};
             border-radius: 20px;
