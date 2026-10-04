@@ -1055,6 +1055,7 @@ class PinVPN(QWidget):
             self.busy = False
             self.connect_button.set_busy(False)
             self.connect_button.setEnabled(True)
+            self.update_vpn_ui()
 
     def disconnect_vpn(self):
         self.set_busy(True, "ОТКЛЮЧЕНИЕ...")
@@ -1077,6 +1078,7 @@ class PinVPN(QWidget):
             self.busy = False
             self.connect_button.set_busy(False)
             self.connect_button.setEnabled(True)
+            self.update_vpn_ui()
 
     def logout(self):
         answer = QMessageBox.question(
