@@ -486,9 +486,7 @@ class PinVPN(QWidget):
         security.setObjectName("sideSecurity")
         side.addWidget(security)
 
-        version = QLabel("PINVPN DESKTOP
-VERSION 1.0.4
-BUILD 3DCORE")
+        version = QLabel("PINVPN DESKTOP\nVERSION 1.0.4\nBUILD 3DCORE")
         version.setObjectName("sideVersion")
         side.addWidget(version)
 
